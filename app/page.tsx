@@ -387,7 +387,7 @@ export default function HomePage() {
           </div>
           <div className="rounded-xl border border-border bg-surface/80 shadow-sm overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="min-w-[780px] w-full text-sm">
+              <table className="w-full text-sm md:min-w-[780px] table-fixed">
                 <thead className="bg-surface-hover/80 text-[11px] uppercase tracking-[0.25em] text-muted-foreground">
                   <tr>
                     <th className="px-4 py-2 text-center font-medium">#</th>
