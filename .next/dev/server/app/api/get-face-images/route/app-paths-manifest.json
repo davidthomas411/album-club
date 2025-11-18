@@ -1,0 +1,3 @@
+{
+  "/api/get-face-images/route": "app/api/get-face-images/route.js"
+}
