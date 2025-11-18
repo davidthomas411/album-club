@@ -445,7 +445,13 @@ export default function HomePage() {
                           </span>
                         </td>
                         <td className="px-4 py-2 text-xs text-foreground whitespace-nowrap">
-                          {pick.created_at ? new Date(pick.created_at).toLocaleString() : 'Unknown'}
+                          {pick.created_at
+                            ? new Date(pick.created_at).toLocaleDateString(undefined, {
+                                year: 'numeric',
+                                month: 'short',
+                                day: 'numeric',
+                              })
+                            : 'Unknown'}
                         </td>
                         <td className="px-4 py-2 text-xs font-semibold text-primary truncate">
                           {pick.user?.display_name || 'Unknown'}
