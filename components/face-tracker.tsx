@@ -7,7 +7,15 @@ interface FaceTrackerProps {
   blobUrls?: Record<string, string> // Map of filename -> blob URL
   size?: number
   debug?: boolean
-  disableOnMobile?: boolean // New prop to disable tracking on mobile
+  disableOnMobile?: boolean
+  autoAnimateOnMobile?: boolean
+  autoAnimationInterval?: [number, number]
+  autoAnimate?: boolean
+  disablePointerTracking?: boolean
+  initialDirection?: {
+    x: number
+    y: number
+  }
 }
 
 const P_MIN = -15
@@ -40,12 +48,25 @@ function gridToFilename(px: number, py: number, size: number) {
   return `gaze_px${sanitize(px)}_py${sanitize(py)}_${size}.webp`
 }
 
-export function FaceTracker({ memberFolder, blobUrls, size = SIZE, debug = false, disableOnMobile = false }: FaceTrackerProps) {
+export function FaceTracker({
+  memberFolder,
+  blobUrls,
+  size = SIZE,
+  debug = false,
+  disableOnMobile = false,
+  autoAnimateOnMobile = false,
+  autoAnimate = false,
+  autoAnimationInterval,
+  disablePointerTracking = false,
+  initialDirection,
+}: FaceTrackerProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const imgRef = useRef<HTMLImageElement>(null)
   const [debugInfo, setDebugInfo] = useState({ mouseX: 0, mouseY: 0, filename: '' })
   const [isMobile, setIsMobile] = useState(false)
   const [orientationEnabled, setOrientationEnabled] = useState(false)
+  const minAutoDelay = autoAnimationInterval?.[0] ?? 1400
+  const maxAutoDelay = autoAnimationInterval?.[1] ?? 2600
 
   useEffect(() => {
     const checkMobile = () => {
@@ -138,23 +159,53 @@ export function FaceTracker({ memberFolder, blobUrls, size = SIZE, debug = false
       setFromNormalized(nx, ny)
     }
 
+    const shouldAutoAnimate =
+      !disableOnMobile && (autoAnimate || (isMobile && autoAnimateOnMobile))
+
     // Desktop: mouse tracking
-    window.addEventListener('mousemove', handleMouseMove)
+    if (!disablePointerTracking) {
+      window.addEventListener('mousemove', handleMouseMove)
+    }
     
     // Mobile: touch tracking
-    if (isMobile && !disableOnMobile) {
+    if (!disablePointerTracking && isMobile && !disableOnMobile) {
       document.addEventListener('touchstart', handleTouch, { passive: true })
       document.addEventListener('touchmove', handleTouchMove, { passive: true })
       
-      if (orientationEnabled) {
+      if (orientationEnabled && !shouldAutoAnimate) {
         window.addEventListener('deviceorientation', handleOrientation)
       }
+    }
+
+    let animationTimeout: number | undefined
+    function scheduleAutoMove(initialDelay?: number) {
+      if (!shouldAutoAnimate) return
+
+      const delay =
+        initialDelay !== undefined
+          ? initialDelay
+          : Math.random() * (maxAutoDelay - minAutoDelay) + minAutoDelay
+
+      animationTimeout = window.setTimeout(() => {
+        const randomX = clamp(Math.random() * 2 - 1, -0.9, 0.9)
+        const randomY = clamp(Math.random() * 2 - 1, -0.9, 0.9)
+        setFromNormalized(randomX, randomY)
+        scheduleAutoMove()
+      }, delay)
+    }
+
+    if (shouldAutoAnimate) {
+      scheduleAutoMove(500 + Math.random() * 1000)
     }
 
     // Initialize with center position
     const rect = containerRef.current?.getBoundingClientRect()
     if (rect) {
-      setFromClient(rect.left + rect.width / 2, rect.top + rect.height / 2)
+      if (initialDirection) {
+        setFromNormalized(initialDirection.x, initialDirection.y)
+      } else {
+        setFromClient(rect.left + rect.width / 2, rect.top + rect.height / 2)
+      }
     }
 
     return () => {
@@ -162,8 +213,25 @@ export function FaceTracker({ memberFolder, blobUrls, size = SIZE, debug = false
       document.removeEventListener('touchstart', handleTouch)
       document.removeEventListener('touchmove', handleTouchMove)
       window.removeEventListener('deviceorientation', handleOrientation)
+      if (animationTimeout) {
+        window.clearTimeout(animationTimeout)
+      }
     }
-  }, [memberFolder, blobUrls, size, debug, isMobile, disableOnMobile, orientationEnabled])
+  }, [
+    memberFolder,
+    blobUrls,
+    size,
+    debug,
+    isMobile,
+    disableOnMobile,
+    orientationEnabled,
+    autoAnimateOnMobile,
+    autoAnimate,
+    disablePointerTracking,
+    minAutoDelay,
+    maxAutoDelay,
+    initialDirection,
+  ])
 
   const enableOrientation = async () => {
     if (typeof (DeviceOrientationEvent as any).requestPermission === 'function') {

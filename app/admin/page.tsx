@@ -84,18 +84,20 @@ export default function AdminPage() {
   async function deleteTheme(id: string) {
     if (!confirm('Are you sure you want to delete this theme?')) return
     
-    console.log('[v0] Attempting to delete theme:', id)
-    const { error } = await supabase
-      .from('weekly_themes')
-      .delete()
-      .eq('id', id)
-
-    if (error) {
-      console.error('[v0] Error deleting theme:', error)
-      alert(`Failed to delete theme: ${error.message}`)
-    } else {
-      console.log('[v0] Theme deleted successfully')
+    try {
+      const response = await fetch(`/api/admin/themes/${id}`, {
+        method: 'DELETE',
+      })
+      const payload = await response.json()
+      if (!response.ok) {
+        console.error('[v0] Error deleting theme:', payload)
+        alert(payload?.error || 'Failed to delete theme')
+        return
+      }
       fetchData()
+    } catch (error) {
+      console.error('[v0] Error deleting theme:', error)
+      alert('Unexpected error deleting theme')
     }
   }
 
@@ -210,6 +212,12 @@ export default function AdminPage() {
                         </div>
                       </div>
                       <div className="flex gap-2">
+                        <Link href={`/set-theme?themeId=${theme.id}`}>
+                          <Button variant="outline" size="sm">
+                            <Edit className="h-4 w-4 mr-2" />
+                            Edit
+                          </Button>
+                        </Link>
                         <Button
                           variant="outline"
                           size="sm"

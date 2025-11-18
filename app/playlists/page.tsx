@@ -2,13 +2,15 @@ import { createClient } from '@/lib/supabase/server'
 import { PlaylistCard } from '@/components/playlist-card'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
-import { Music2, Plus, ListMusic } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
+import { Music2, Plus, ListMusic, ExternalLink } from 'lucide-react'
 import Link from 'next/link'
 
 export default async function PlaylistsPage() {
   const supabase = await createClient()
   
   const { data: { user } } = await supabase.auth.getUser()
+  const featuredPlaylistUrl = 'https://open.spotify.com/playlist/4P2eOkTLUDOdSoBC71PRsP?si=94993b7fa35b4ef4'
 
   // Get all playlists with creator info and item counts
   const { data: playlists } = await supabase
@@ -76,27 +78,83 @@ export default async function PlaylistsPage() {
 
         {playlistsWithCounts.length > 0 ? (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <a
+              href={featuredPlaylistUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block h-full"
+            >
+              <Card className="hover:shadow-lg transition-shadow h-full">
+                <CardHeader>
+                  <div className="flex items-start justify-between gap-4 mb-2">
+                    <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                      <Music2 className="h-6 w-6 text-primary" />
+                    </div>
+                    <Badge variant="secondary">Featured</Badge>
+                  </div>
+                  <CardTitle className="text-xl">Album Club Official Playlist</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <p className="text-sm text-muted-foreground leading-relaxed">
+                    Curated highlights of recent picks. Opens on Spotify and keeps everyone in sync.
+                  </p>
+                  <div className="flex items-center justify-between text-sm text-primary font-semibold">
+                    Open Playlist
+                    <ExternalLink className="h-4 w-4" />
+                  </div>
+                </CardContent>
+              </Card>
+            </a>
             {playlistsWithCounts.map((playlist) => (
               <PlaylistCard key={playlist.id} playlist={playlist} />
             ))}
           </div>
         ) : (
-          <Card>
-            <CardContent className="p-12 text-center">
-              <ListMusic className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-              <p className="text-lg text-muted-foreground mb-4">
-                No playlists yet. Create the first one!
-              </p>
-              {user && (
-                <Link href="/create-playlist">
-                  <Button>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Create Playlist
-                  </Button>
-                </Link>
-              )}
-            </CardContent>
-          </Card>
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <a
+              href={featuredPlaylistUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block h-full"
+            >
+              <Card className="hover:shadow-lg transition-shadow h-full">
+                <CardHeader>
+                  <div className="flex items-start justify-between gap-4 mb-2">
+                    <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                      <Music2 className="h-6 w-6 text-primary" />
+                    </div>
+                    <Badge variant="secondary">Featured</Badge>
+                  </div>
+                  <CardTitle className="text-xl">Album Club Official Playlist</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <p className="text-sm text-muted-foreground leading-relaxed">
+                    Curated highlights of recent picks. Opens on Spotify and keeps everyone in sync.
+                  </p>
+                  <div className="flex items-center justify-between text-sm text-primary font-semibold">
+                    Open Playlist
+                    <ExternalLink className="h-4 w-4" />
+                  </div>
+                </CardContent>
+              </Card>
+            </a>
+            <Card>
+              <CardContent className="p-12 text-center">
+                <ListMusic className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                <p className="text-lg text-muted-foreground mb-4">
+                  No community playlists yet. Create the first one!
+                </p>
+                {user && (
+                  <Link href="/create-playlist">
+                    <Button>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Create Playlist
+                    </Button>
+                  </Link>
+                )}
+              </CardContent>
+            </Card>
+          </div>
         )}
       </div>
     </div>

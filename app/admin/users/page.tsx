@@ -135,35 +135,45 @@ export default function UsersAdminPage() {
       return
     }
 
-    console.log('[v0] Deleting multiple users:', Array.from(selectedIds))
+    console.log('[v0] Deleting multiple users via API:', Array.from(selectedIds))
     setDeleting(true)
 
-    let successCount = 0
-    let failCount = 0
+    try {
+      const response = await fetch('/api/admin/delete-users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: Array.from(selectedIds) }),
+      })
 
-    for (const id of selectedIds) {
+      const rawBody = await response.text()
+      let payload: any = {}
       try {
-        await supabase.from('music_picks').delete().eq('user_id', id)
-        await supabase.from('weekly_themes').delete().eq('curator_id', id)
-        
-        const { error } = await supabase.from('profiles').delete().eq('id', id)
-        
-        if (error) {
-          console.error(`[v0] Failed to delete user ${id}:`, error)
-          failCount++
-        } else {
-          successCount++
-        }
-      } catch (err) {
-        console.error(`[v0] Error deleting user ${id}:`, err)
-        failCount++
+        payload = rawBody ? JSON.parse(rawBody) : {}
+      } catch {
+        payload = { error: rawBody || 'Unknown error' }
       }
+
+      if (!response.ok) {
+        console.error('[v0] Delete users API error:', {
+          status: response.status,
+          statusText: response.statusText,
+          payload,
+        })
+        alert(payload?.error || `Failed to delete users (status ${response.status})`)
+      } else {
+        const failureCount =
+          payload.results?.filter((result: { status: string }) => result.status === 'error').length ?? 0
+        const successCount = (payload.results?.length ?? 0) - failureCount
+        alert(`Deleted ${successCount} user(s). Failed: ${failureCount}`)
+      }
+    } catch (error) {
+      console.error('[v0] Error calling delete API:', error)
+      alert('Unexpected error deleting users')
+    } finally {
+      setDeleting(false)
     }
 
-    setDeleting(false)
     setSelectedIds(new Set())
-    
-    alert(`Deleted ${successCount} user(s). Failed: ${failCount}`)
     await fetchUsers()
   }
 

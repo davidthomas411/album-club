@@ -33,10 +33,16 @@ interface MusicPick {
   } | null
 }
 
+const CORE_MEMBERS = [
+  { id: 'neil', displayName: 'Neil', facePrefix: 'neil' },
+  { id: 'ferg', displayName: 'Ferg', facePrefix: 'ferg' },
+  { id: 'rory', displayName: 'Rory', facePrefix: 'rory' },
+  { id: 'dave', displayName: 'Dave', facePrefix: 'dave' },
+] as const
+
 export default function HomePage() {
   const [currentTheme, setCurrentTheme] = useState<WeeklyTheme | null>(null)
   const [weeklyPicks, setWeeklyPicks] = useState<MusicPick[]>([])
-  const [blobUrls, setBlobUrls] = useState<Record<string, string> | undefined>(undefined)
   const [userFaceImages, setUserFaceImages] = useState<Record<string, Record<string, string>>>({})
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [previousPickMetadata, setPreviousPickMetadata] = useState<
@@ -116,19 +122,32 @@ export default function HomePage() {
   }, [])
 
   useEffect(() => {
-    async function fetchFaceImages() {
-      try {
-        const response = await fetch('/api/get-face-images?member=dave')
-        const data = await response.json()
-        if (data.images) {
-          setBlobUrls(data.images)
-        }
-      } catch (error) {
-        console.error('[v0] Error fetching face images:', error)
+    async function fetchCoreMemberFaces() {
+      const cacheBust = Date.now()
+      const faceMap: Record<string, Record<string, string>> = {}
+      await Promise.all(
+        CORE_MEMBERS.map(async (member) => {
+          try {
+            const response = await fetch(
+              `/api/get-face-images?member=${member.facePrefix}&_=${cacheBust}`,
+              { cache: 'no-store' },
+            )
+            const data = await response.json()
+            if (data.images) {
+              faceMap[member.facePrefix] = data.images
+            }
+          } catch (error) {
+            console.error(`[v0] Error fetching face images for ${member.facePrefix}:`, error)
+          }
+        })
+      )
+
+      if (Object.keys(faceMap).length > 0) {
+        setUserFaceImages((prev) => ({ ...prev, ...faceMap }))
       }
     }
 
-    fetchFaceImages()
+    fetchCoreMemberFaces()
   }, [])
 
   useEffect(() => {
@@ -140,10 +159,14 @@ export default function HomePage() {
       )
       
       const faceImagesMap: Record<string, Record<string, string>> = {}
+      const cacheBust = Date.now()
       
       for (const userPrefix of uniqueUsers) {
         try {
-          const response = await fetch(`/api/get-face-images?member=${userPrefix}`)
+          const response = await fetch(
+            `/api/get-face-images?member=${userPrefix}&_=${cacheBust}`,
+            { cache: 'no-store' },
+          )
           const data = await response.json()
           if (data.images) {
             faceImagesMap[userPrefix] = data.images
@@ -153,7 +176,9 @@ export default function HomePage() {
         }
       }
       
-      setUserFaceImages(faceImagesMap)
+      if (Object.keys(faceImagesMap).length > 0) {
+        setUserFaceImages(prev => ({ ...prev, ...faceImagesMap }))
+      }
     }
 
     if (weeklyPicks.length > 0) {
@@ -189,8 +214,17 @@ export default function HomePage() {
     loadPreviousPickMetadata()
   }, [])
 
-  const curatorFolder = currentTheme?.curator?.face_images_folder || 'curator'
-  const curatorName = currentTheme?.curator?.display_name || 'Curator'
+  const fallbackCurator = CORE_MEMBERS[0]
+  const activeCuratorPrefix =
+    currentTheme?.curator?.face_blob_prefix || fallbackCurator?.facePrefix || ''
+  const curatorMember =
+    CORE_MEMBERS.find((member) => member.facePrefix === activeCuratorPrefix) ||
+    fallbackCurator
+  const curatorFaceImages = curatorMember ? userFaceImages[curatorMember.facePrefix] : undefined
+  const curatorName =
+    currentTheme?.curator?.display_name ||
+    curatorMember?.displayName ||
+    'Curator'
 
   return (
     <div className="flex min-h-screen bg-background overflow-x-hidden">
@@ -216,51 +250,44 @@ export default function HomePage() {
           <p className="text-xs md:text-sm text-muted-foreground">Neil made us quit Spotify because morals</p>
         </section>
 
-        {currentTheme ? (
-          <section className="mb-8 md:mb-12 bg-gradient-to-r from-primary/20 to-primary/5 rounded-lg p-8 md:p-12 relative overflow-hidden">
-            <div className="flex items-center gap-6 md:gap-8 relative z-10">
-              {currentTheme.curator && blobUrls && (
-                <div className="relative w-32 h-32 md:w-48 md:h-48 flex-shrink-0">
-                  <div className="absolute inset-0 bg-gradient-to-br from-transparent via-background/30 to-background rounded-full z-10 pointer-events-none" />
-                  <FaceTracker
-                    memberFolder={currentTheme.curator.face_blob_prefix || 'dave'}
-                    blobUrls={blobUrls}
-                    size={256}
-                  />
-                </div>
+        <section className={`mb-8 md:mb-12 bg-gradient-to-r ${currentTheme ? 'from-primary/20 to-primary/5' : 'from-muted/20 to-muted/5'} rounded-lg p-6 md:p-10 relative overflow-hidden`}>
+          <div className="relative z-10 flex flex-col gap-8 md:flex-row md:items-center">
+            <div className="flex justify-center md:justify-start">
+              <div className="relative w-36 h-36 md:w-48 md:h-48 rounded-full overflow-hidden border border-white/10 bg-background/70 shadow-2xl">
+                <FaceTracker
+                  memberFolder={curatorMember.facePrefix}
+                  blobUrls={curatorFaceImages}
+                  size={256}
+                />
+              </div>
+            </div>
+            <div className="flex-1 text-center md:text-left">
+              <p className="text-base md:text-lg text-muted-foreground mb-2">This Week's Theme</p>
+              <h2 className="text-4xl md:text-6xl font-bold text-foreground mb-3">
+                {currentTheme ? currentTheme.theme_name : 'No theme set'}
+              </h2>
+              {currentTheme?.theme_description ? (
+                <p className="text-base md:text-lg text-muted-foreground mb-2">
+                  {currentTheme.theme_description}
+                </p>
+              ) : (
+                <p className="text-base md:text-lg text-muted-foreground mb-2">
+                  Create a new theme to get the conversation started.
+                </p>
               )}
-              
-              <div className="flex-1">
-                <p className="text-base md:text-lg text-muted-foreground mb-2">This Week's Theme</p>
-                <h2 className="text-4xl md:text-6xl font-bold text-foreground mb-3">{currentTheme.theme_name}</h2>
-                {currentTheme.theme_description && (
-                  <p className="text-base md:text-lg text-muted-foreground mb-2">{currentTheme.theme_description}</p>
-                )}
-                <p className="text-base md:text-lg text-muted-foreground">Curated by {curatorName}</p>
+              <p className="text-base md:text-lg text-muted-foreground">
+                {currentTheme ? `Curated by ${curatorName}` : `Curated by ${curatorMember.displayName}`}
+              </p>
+              <div className="mt-4">
+                <Link href="/set-theme">
+                  <button className="bg-primary hover:bg-primary-hover text-black font-semibold py-3 px-6 md:px-8 rounded-full transition-all text-base whitespace-nowrap">
+                    {currentTheme ? 'Set New Theme' : 'Set Theme'}
+                  </button>
+                </Link>
               </div>
-              <Link href="/set-theme">
-                <button className="bg-primary hover:bg-primary-hover text-black font-semibold py-3 px-6 md:px-8 rounded-full transition-all text-base whitespace-nowrap">
-                  Set New
-                </button>
-              </Link>
             </div>
-          </section>
-        ) : (
-          <section className="mb-6 md:mb-8 bg-gradient-to-r from-muted/20 to-muted/5 rounded-lg p-4 md:p-6">
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex-1">
-                <p className="text-xs md:text-sm text-muted-foreground mb-1">This Week's Theme</p>
-                <h2 className="text-2xl md:text-4xl font-bold text-foreground mb-1">No theme set</h2>
-                <p className="text-xs md:text-sm text-muted-foreground">Create the first weekly theme</p>
-              </div>
-              <Link href="/set-theme">
-                <button className="bg-primary hover:bg-primary-hover text-black font-semibold py-2 px-4 md:px-6 rounded-full transition-all text-sm md:text-base whitespace-nowrap">
-                  Set Theme
-                </button>
-              </Link>
-            </div>
-          </section>
-        )}
+          </div>
+        </section>
 
         <section>
           <div className="flex items-center justify-between mb-6 md:mb-8">
@@ -281,7 +308,7 @@ export default function HomePage() {
                 return (
                   <a 
                     key={pick.id}
-                    href={pick.platform_url}
+                    href={`/link?url=${encodeURIComponent(pick.platform_url)}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="group bg-surface hover:bg-surface-hover p-5 md:p-6 rounded-lg transition-all duration-300 cursor-pointer flex flex-col"
@@ -358,44 +385,73 @@ export default function HomePage() {
               Showing latest {previousPicks.length} entries from spotify_links.md
             </span>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {previousPicks
-              .slice()
-              .sort(
-                (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-              )
-              .map((pick, index) => {
-                const metadata = previousPickMetadata[pick.url]
-                return (
-                  <a
-                    key={`${pick.date}-${index}`}
-                    href={pick.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="rounded-lg border border-border bg-surface p-3 shadow-sm transition hover:shadow-md hover:border-primary flex flex-col gap-3 sm:flex-row sm:gap-4"
-                  >
-                    <div className="w-full sm:w-16 h-32 sm:h-16 rounded-md bg-surface-hover flex items-center justify-center overflow-hidden">
-                      {metadata?.albumArtwork ? (
-                        <img src={metadata.albumArtwork} alt={metadata.title} className="w-full h-full object-cover" />
-                      ) : (
-                        <Music className="w-6 h-6 text-muted-foreground" />
-                      )}
-                    </div>
-                    <div className="flex-1">
-                      <div className="text-xs text-muted-foreground">{pick.date}</div>
-                      <p className="text-sm font-semibold text-foreground leading-tight mt-1">
-                        {metadata?.title || "Album information loading..."}
-                      </p>
-                      <p className="text-xs text-muted-foreground">{metadata?.artist}</p>
-                    <p className="text-sm font-semibold text-primary mt-1">{pick.person}</p>
-                      <div className="mt-2 inline-flex items-center gap-2 text-xs text-primary">
-                        Open link
-                        <ExternalLink className="h-4 w-4" />
-                      </div>
-                    </div>
-                  </a>
-                )
-              })}
+          <div className="rounded-xl border border-border bg-surface/80 shadow-sm overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="min-w-[780px] w-full text-sm">
+                <thead className="bg-surface-hover/80 text-[11px] uppercase tracking-[0.25em] text-muted-foreground">
+                  <tr>
+                    <th className="px-4 py-2 text-center font-medium">#</th>
+                    <th className="px-4 py-2 text-left font-medium">Track</th>
+                    <th className="px-4 py-2 text-left font-medium">Theme</th>
+                    <th className="px-4 py-2 text-left font-medium">Date</th>
+                    <th className="px-4 py-2 text-left font-medium">Picker</th>
+                    <th className="px-4 py-2 text-right font-medium">Open</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {previousPicks
+                    .slice()
+                    .sort(
+                      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+                    )
+                    .map((pick, index) => {
+                      const metadata = previousPickMetadata[pick.url]
+                      const resolvedUrl = `/link?url=${encodeURIComponent(pick.url)}`
+                      return (
+                        <tr
+                          key={`${pick.date}-${index}`}
+                          className={`${index % 2 === 0 ? 'bg-transparent' : 'bg-surface-hover/40'} hover:bg-surface-hover/70 transition-colors`}
+                        >
+                          <td className="px-4 py-2 text-center text-muted-foreground text-xs">{index + 1}</td>
+                          <td className="px-4 py-2">
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div className="w-10 h-10 rounded-sm bg-surface-hover flex items-center justify-center overflow-hidden shadow-inner flex-shrink-0">
+                                {metadata?.albumArtwork ? (
+                                  <img src={metadata.albumArtwork} alt={metadata.title} className="w-full h-full object-cover" />
+                                ) : (
+                                  <Music className="w-4 h-4 text-muted-foreground" />
+                                )}
+                              </div>
+                              <div className="min-w-0">
+                                <p className="font-semibold text-foreground truncate">
+                                  {metadata?.title || "Album information loading..."}
+                                </p>
+                                <p className="text-xs text-muted-foreground truncate">{metadata?.artist || 'Unknown artist'}</p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-4 py-2">
+                            <span className="text-xs text-muted-foreground italic">Not tracked</span>
+                          </td>
+                          <td className="px-4 py-2 text-xs text-foreground whitespace-nowrap">{pick.date}</td>
+                          <td className="px-4 py-2 text-xs font-semibold text-primary truncate">{pick.person}</td>
+                          <td className="px-4 py-2 text-right">
+                            <a
+                              href={resolvedUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-2 text-xs text-primary font-semibold"
+                            >
+                              Open
+                              <ExternalLink className="h-3.5 w-3.5" />
+                            </a>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                </tbody>
+              </table>
+            </div>
           </div>
         </section>
       </main>

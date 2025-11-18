@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, ListMusic, Plus, Search, Settings, X, Music2 } from 'lucide-react'
+import { Home, ListMusic, Plus, Search, Shield, X, Music2, SlidersHorizontal, LogIn, UserPlus } from 'lucide-react'
 
 interface SidebarProps {
   onClose?: () => void
@@ -16,7 +16,8 @@ export function Sidebar({ onClose }: SidebarProps) {
     { href: '/feed', label: 'Feed', icon: Music2 },
     { href: '/playlists', label: 'Playlists', icon: ListMusic },
     { href: '/search', label: 'Search', icon: Search },
-    { href: '/admin', label: 'Admin', icon: Settings },
+    { href: '/admin', label: 'Admin', icon: Shield },
+    { href: '/settings', label: 'Preferences', icon: SlidersHorizontal },
   ]
 
   return (
@@ -66,8 +67,26 @@ export function Sidebar({ onClose }: SidebarProps) {
       </Link>
 
       {/* Bottom section */}
-      <div className="mt-auto pt-6 border-t border-border">
-        <p className="text-sm text-muted-foreground">
+      <div className="mt-auto pt-6 border-t border-border space-y-3">
+        <div className="flex flex-col gap-2">
+          <Link
+            href="/auth/login"
+            className="flex items-center justify-center gap-2 rounded-md border border-border px-4 py-2 text-sm font-semibold hover:border-primary hover:text-foreground transition-colors"
+            onClick={onClose}
+          >
+            <LogIn className="w-4 h-4" />
+            Log in
+          </Link>
+          <Link
+            href="/auth/sign-up"
+            className="flex items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-black hover:bg-primary-hover transition-colors"
+            onClick={onClose}
+          >
+            <UserPlus className="w-4 h-4" />
+            Create account
+          </Link>
+        </div>
+        <p className="text-sm text-muted-foreground text-center">
           Share music from any platform
         </p>
       </div>

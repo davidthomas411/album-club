@@ -114,7 +114,7 @@ export function MusicPickCard({ pick }: MusicPickCardProps) {
               <div className={`h-2 w-2 rounded-full ${platformColor}`} />
               <span className="text-sm text-muted-foreground">{platformName}</span>
               <a
-                href={pick.platform_url}
+                href={`/link/${pick.id}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="ml-auto"

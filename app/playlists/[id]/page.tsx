@@ -149,8 +149,8 @@ export default async function PlaylistDetailPage({
                         <Badge variant="outline" className="text-xs">
                           {pick.platform}
                         </Badge>
-                        <a
-                          href={pick.platform_url}
+                          <a
+                            href={`/link/${pick.id}`}
                           target="_blank"
                           rel="noopener noreferrer"
                         >
