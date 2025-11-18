@@ -193,7 +193,7 @@ export default function HomePage() {
   const curatorName = currentTheme?.curator?.display_name || 'Curator'
 
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="flex min-h-screen bg-background overflow-x-hidden">
       <button
         onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
         className="fixed top-4 left-4 z-50 md:hidden bg-surface p-2 rounded-lg shadow-lg"
