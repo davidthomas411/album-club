@@ -3,8 +3,9 @@ import { MusicPickCard } from '@/components/music-pick-card'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Music2, Plus } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import Link from 'next/link'
+import { SiteLogo } from '@/components/site-logo'
 
 export default async function FeedPage() {
   const supabase = await createClient()
@@ -47,7 +48,7 @@ export default async function FeedPage() {
       <header className="border-b border-border bg-card sticky top-0 z-10">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2">
-            <Music2 className="h-8 w-8 text-primary" />
+            <SiteLogo size={40} className="bg-primary/10 p-1" />
             <h1 className="text-2xl font-bold text-foreground">AlbumClub</h1>
           </Link>
           <nav className="flex items-center gap-4">
@@ -57,18 +58,12 @@ export default async function FeedPage() {
             <Link href="/playlists">
               <Button variant="ghost">Playlists</Button>
             </Link>
-            {user ? (
-              <Link href="/add-pick">
-                <Button>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Pick
-                </Button>
-              </Link>
-            ) : (
-              <Link href="/auth/login">
-                <Button>Sign In</Button>
-              </Link>
-            )}
+            <Link href="/add-pick">
+              <Button>
+                <Plus className="h-4 w-4 mr-2" />
+                Add Pick
+              </Button>
+            </Link>
           </nav>
         </div>
       </header>
@@ -86,27 +81,6 @@ export default async function FeedPage() {
               </p>
             </div>
 
-            {musicPicks && musicPicks.length > 0 ? (
-              <div className="space-y-4">
-                {musicPicks.map((pick) => (
-                  <MusicPickCard key={pick.id} pick={pick} />
-                ))}
-              </div>
-            ) : (
-              <Card>
-                <CardContent className="p-12 text-center">
-                  <Music2 className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                  <p className="text-lg text-muted-foreground mb-4">
-                    No picks yet. Be the first to share!
-                  </p>
-                  {user && (
-                    <Link href="/add-pick">
-                      <Button>Add Your First Pick</Button>
-                    </Link>
-                  )}
-                </CardContent>
-              </Card>
-            )}
           </div>
 
           {/* Sidebar */}
@@ -129,9 +103,7 @@ export default async function FeedPage() {
                         className="h-12 w-12 rounded-full object-cover"
                       />
                     ) : (
-                      <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center">
-                        <Music2 className="h-6 w-6 text-muted-foreground" />
-                      </div>
+                      <SiteLogo size={48} className="bg-primary/10 p-1 rounded-full" />
                     )}
                     <div>
                       <p className="text-sm text-muted-foreground">Curator</p>

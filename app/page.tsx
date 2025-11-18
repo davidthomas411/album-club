@@ -6,7 +6,6 @@ import { Music, Play, Menu, ExternalLink } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { createBrowserClient } from '@/lib/supabase/client'
 import Link from 'next/link'
-import { previousPicks } from '@/lib/previous-picks'
 
 interface WeeklyTheme {
   id: string
@@ -23,6 +22,7 @@ interface MusicPick {
   id: string
   artist: string
   album: string
+  title?: string | null
   platform_url: string
   platform: string | null
   album_artwork_url: string | null
@@ -30,6 +30,10 @@ interface MusicPick {
   user: {
     display_name: string
     face_blob_prefix: string | null
+  } | null
+  created_at?: string
+  weekly_theme?: {
+    theme_name: string | null
   } | null
 }
 
@@ -40,14 +44,16 @@ const CORE_MEMBERS = [
   { id: 'dave', displayName: 'Dave', facePrefix: 'dave' },
 ] as const
 
+const storageBase = process.env.NEXT_PUBLIC_SUPABASE_URL
+  ? `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${process.env.NEXT_PUBLIC_SUPABASE_FACE_BUCKET || 'faces'}`
+  : null
+
 export default function HomePage() {
   const [currentTheme, setCurrentTheme] = useState<WeeklyTheme | null>(null)
   const [weeklyPicks, setWeeklyPicks] = useState<MusicPick[]>([])
   const [userFaceImages, setUserFaceImages] = useState<Record<string, Record<string, string>>>({})
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
-  const [previousPickMetadata, setPreviousPickMetadata] = useState<
-    Record<string, { title: string; artist: string; albumArtwork: string | null }>
-  >({})
+  const [recentPicks, setRecentPicks] = useState<MusicPick[]>([])
   const supabase = createBrowserClient()
 
   useEffect(() => {
@@ -122,6 +128,36 @@ export default function HomePage() {
   }, [])
 
   useEffect(() => {
+    async function fetchRecentPicks() {
+      const { data, error } = await supabase
+        .from('music_picks')
+        .select(`
+          id,
+          title,
+          album,
+          artist,
+          created_at,
+          platform_url,
+          album_artwork_url,
+          weekly_theme:weekly_theme_id(theme_name),
+          user:user_id(display_name, face_blob_prefix)
+        `)
+        .order('created_at', { ascending: false })
+        .limit(60)
+
+      if (error) {
+        console.error('[v0] Error fetching recent picks:', error)
+        return
+      }
+      if (data) {
+        setRecentPicks(data)
+      }
+    }
+
+    fetchRecentPicks()
+  }, [])
+
+  useEffect(() => {
     async function fetchCoreMemberFaces() {
       const cacheBust = Date.now()
       const faceMap: Record<string, Record<string, string>> = {}
@@ -186,34 +222,6 @@ export default function HomePage() {
     }
   }, [weeklyPicks])
 
-  useEffect(() => {
-    async function loadPreviousPickMetadata() {
-      const uniqueLinks = Array.from(new Set(previousPicks.map((pick) => pick.url)))
-      const metadataEntries: Record<string, { title: string; artist: string; albumArtwork: string | null }> = {}
-
-      await Promise.all(
-        uniqueLinks.map(async (url) => {
-          try {
-            const response = await fetch(`/api/fetch-album-metadata?url=${encodeURIComponent(url)}`)
-            if (!response.ok) return
-            const data = await response.json()
-            metadataEntries[url] = {
-              title: data.title || "Unknown Album",
-              artist: data.artist || "Unknown Artist",
-              albumArtwork: data.albumArtwork || null,
-            }
-          } catch (error) {
-            console.error(`[v0] Failed to fetch metadata for ${url}:`, error)
-          }
-        }),
-      )
-
-      setPreviousPickMetadata(metadataEntries)
-    }
-
-    loadPreviousPickMetadata()
-  }, [])
-
   const fallbackCurator = CORE_MEMBERS[0]
   const activeCuratorPrefix =
     currentTheme?.curator?.face_blob_prefix || fallbackCurator?.facePrefix || ''
@@ -258,6 +266,9 @@ export default function HomePage() {
                   memberFolder={curatorMember.facePrefix}
                   blobUrls={curatorFaceImages}
                   size={256}
+                  fallbackBasePath={
+                    storageBase ? `${storageBase}/${curatorMember.facePrefix}` : undefined
+                  }
                 />
               </div>
             </div>
@@ -266,13 +277,9 @@ export default function HomePage() {
               <h2 className="text-4xl md:text-6xl font-bold text-foreground mb-3">
                 {currentTheme ? currentTheme.theme_name : 'No theme set'}
               </h2>
-              {currentTheme?.theme_description ? (
+              {currentTheme?.theme_description && (
                 <p className="text-base md:text-lg text-muted-foreground mb-2">
                   {currentTheme.theme_description}
-                </p>
-              ) : (
-                <p className="text-base md:text-lg text-muted-foreground mb-2">
-                  Create a new theme to get the conversation started.
                 </p>
               )}
               <p className="text-base md:text-lg text-muted-foreground">
@@ -351,6 +358,9 @@ export default function HomePage() {
                             memberFolder={userPrefix}
                             blobUrls={userFaces}
                             size={256}
+                            fallbackBasePath={
+                              storageBase ? `${storageBase}/${userPrefix}` : undefined
+                            }
                           />
                         </div>
                       ) : (
@@ -382,15 +392,14 @@ export default function HomePage() {
           <div className="flex items-center justify-between mb-6 md:mb-8">
             <h2 className="text-2xl md:text-3xl font-bold text-foreground">Recent Picks History</h2>
             <span className="text-xs md:text-sm text-muted-foreground">
-              Showing latest {previousPicks.length} entries from spotify_links.md
+              Showing latest {recentPicks.length} entries from Supabase
             </span>
           </div>
           <div className="rounded-xl border border-border bg-surface/80 shadow-sm overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full text-sm md:min-w-[780px] table-fixed">
+              <table className="w-full text-sm md:min-w-[720px] table-fixed">
                 <thead className="bg-surface-hover/80 text-[11px] uppercase tracking-[0.25em] text-muted-foreground">
                   <tr>
-                    <th className="px-4 py-2 text-center font-medium">#</th>
                     <th className="px-4 py-2 text-left font-medium">Track</th>
                     <th className="px-4 py-2 text-left font-medium">Theme</th>
                     <th className="px-4 py-2 text-left font-medium">Date</th>
@@ -399,56 +408,62 @@ export default function HomePage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {previousPicks
-                    .slice()
-                    .sort(
-                      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-                    )
-                    .map((pick, index) => {
-                      const metadata = previousPickMetadata[pick.url]
-                      const resolvedUrl = `/link?url=${encodeURIComponent(pick.url)}`
-                      return (
-                        <tr
-                          key={`${pick.date}-${index}`}
-                          className={`${index % 2 === 0 ? 'bg-transparent' : 'bg-surface-hover/40'} hover:bg-surface-hover/70 transition-colors`}
-                        >
-                          <td className="px-4 py-2 text-center text-muted-foreground text-xs">{index + 1}</td>
-                          <td className="px-4 py-2">
-                            <div className="flex items-center gap-3 min-w-0">
-                              <div className="w-10 h-10 rounded-sm bg-surface-hover flex items-center justify-center overflow-hidden shadow-inner flex-shrink-0">
-                                {metadata?.albumArtwork ? (
-                                  <img src={metadata.albumArtwork} alt={metadata.title} className="w-full h-full object-cover" />
-                                ) : (
-                                  <Music className="w-4 h-4 text-muted-foreground" />
-                                )}
-                              </div>
-                              <div className="min-w-0">
-                                <p className="font-semibold text-foreground truncate">
-                                  {metadata?.title || "Album information loading..."}
-                                </p>
-                                <p className="text-xs text-muted-foreground truncate">{metadata?.artist || 'Unknown artist'}</p>
-                              </div>
+                  {recentPicks.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="px-4 py-6 text-center text-muted-foreground">
+                        No picks found.
+                      </td>
+                    </tr>
+                  )}
+                  {recentPicks.map((pick, index) => {
+                    const resolvedUrl = `/link?url=${encodeURIComponent(pick.platform_url)}`
+                    return (
+                      <tr
+                        key={pick.id}
+                        className={`${index % 2 === 0 ? 'bg-transparent' : 'bg-surface-hover/40'} hover:bg-surface-hover/70 transition-colors`}
+                      >
+                        <td className="px-4 py-2">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="w-10 h-10 rounded-sm bg-surface-hover flex items-center justify-center overflow-hidden shadow-inner flex-shrink-0">
+                              {pick.album_artwork_url ? (
+                                <img src={pick.album_artwork_url} alt={pick.album || pick.title || pick.artist} className="w-full h-full object-cover" />
+                              ) : (
+                                <Music className="w-4 h-4 text-muted-foreground" />
+                              )}
                             </div>
-                          </td>
-                          <td className="px-4 py-2">
-                            <span className="text-xs text-muted-foreground italic">Not tracked</span>
-                          </td>
-                          <td className="px-4 py-2 text-xs text-foreground whitespace-nowrap">{pick.date}</td>
-                          <td className="px-4 py-2 text-xs font-semibold text-primary truncate">{pick.person}</td>
-                          <td className="px-4 py-2 text-right">
-                            <a
-                              href={resolvedUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-2 text-xs text-primary font-semibold"
-                            >
-                              Open
-                              <ExternalLink className="h-3.5 w-3.5" />
-                            </a>
-                          </td>
-                        </tr>
-                      )
-                    })}
+                            <div className="min-w-0">
+                              <p className="font-semibold text-foreground truncate">
+                                {pick.title || pick.album || 'Untitled'}
+                              </p>
+                              <p className="text-xs text-muted-foreground truncate">{pick.artist || 'Unknown artist'}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-2">
+                          <span className="text-xs text-muted-foreground italic">
+                            {pick.weekly_theme?.theme_name || 'Not tracked'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2 text-xs text-foreground whitespace-nowrap">
+                          {pick.created_at ? new Date(pick.created_at).toLocaleString() : 'Unknown'}
+                        </td>
+                        <td className="px-4 py-2 text-xs font-semibold text-primary truncate">
+                          {pick.user?.display_name || 'Unknown'}
+                        </td>
+                        <td className="px-4 py-2 text-right">
+                          <a
+                            href={resolvedUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-2 text-xs text-primary font-semibold"
+                          >
+                            Open
+                            <ExternalLink className="h-3.5 w-3.5" />
+                          </a>
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>

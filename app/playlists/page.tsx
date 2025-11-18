@@ -3,14 +3,30 @@ import { PlaylistCard } from '@/components/playlist-card'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Music2, Plus, ListMusic, ExternalLink } from 'lucide-react'
+import { Plus, ListMusic, ExternalLink } from 'lucide-react'
+import { SiteLogo } from '@/components/site-logo'
 import Link from 'next/link'
 
 export default async function PlaylistsPage() {
   const supabase = await createClient()
   
   const { data: { user } } = await supabase.auth.getUser()
-  const featuredPlaylistUrl = 'https://open.spotify.com/playlist/4P2eOkTLUDOdSoBC71PRsP?si=94993b7fa35b4ef4'
+  const albumPlaylistUrl = 'https://open.spotify.com/playlist/4P2eOkTLUDOdSoBC71PRsP?si=40e5b828d0c54846'
+  const singlesPlaylistUrl = 'https://open.spotify.com/playlist/5YM1TTHvtf8Do3ntWHK7ya?si=6456c03a613f4055'
+  const featuredPlaylists = [
+    {
+      title: 'Singles Club Playlist',
+      description: 'A living mix of every single shared by the crew.',
+      href: singlesPlaylistUrl,
+      badge: 'Featured',
+    },
+    {
+      title: 'Album Club Official Playlist',
+      description: 'Curated highlights of recent picks. Opens on Spotify and keeps everyone in sync.',
+      href: albumPlaylistUrl,
+      badge: 'Featured',
+    },
+  ]
 
   // Get all playlists with creator info and item counts
   const { data: playlists } = await supabase
@@ -40,7 +56,7 @@ export default async function PlaylistsPage() {
       <header className="border-b border-border bg-card">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2">
-            <Music2 className="h-8 w-8 text-primary" />
+            <SiteLogo size={40} className="bg-primary/10 p-1" />
             <h1 className="text-2xl font-bold text-foreground">AlbumClub</h1>
           </Link>
           <nav className="flex items-center gap-4">
@@ -50,18 +66,12 @@ export default async function PlaylistsPage() {
             <Link href="/playlists">
               <Button variant="ghost">Playlists</Button>
             </Link>
-            {user ? (
-              <Link href="/create-playlist">
-                <Button>
-                  <Plus className="h-4 w-4 mr-2" />
-                  New Playlist
-                </Button>
-              </Link>
-            ) : (
-              <Link href="/auth/login">
-                <Button>Sign In</Button>
-              </Link>
-            )}
+            <Link href="/create-playlist">
+              <Button>
+                <Plus className="h-4 w-4 mr-2" />
+                New Playlist
+              </Button>
+            </Link>
           </nav>
         </div>
       </header>
@@ -78,66 +88,68 @@ export default async function PlaylistsPage() {
 
         {playlistsWithCounts.length > 0 ? (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <a
-              href={featuredPlaylistUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="block h-full"
-            >
-              <Card className="hover:shadow-lg transition-shadow h-full">
-                <CardHeader>
-                  <div className="flex items-start justify-between gap-4 mb-2">
-                    <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-                      <Music2 className="h-6 w-6 text-primary" />
+            {featuredPlaylists.map((playlist) => (
+              <a
+                key={playlist.title}
+                href={playlist.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block h-full"
+              >
+                <Card className="hover:shadow-lg transition-shadow h-full">
+                  <CardHeader>
+                    <div className="flex items-start justify-between gap-4 mb-2">
+                      <SiteLogo size={48} className="bg-primary/10 p-1 rounded-lg" />
+                      <Badge variant="secondary">{playlist.badge}</Badge>
                     </div>
-                    <Badge variant="secondary">Featured</Badge>
-                  </div>
-                  <CardTitle className="text-xl">Album Club Official Playlist</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <p className="text-sm text-muted-foreground leading-relaxed">
-                    Curated highlights of recent picks. Opens on Spotify and keeps everyone in sync.
-                  </p>
-                  <div className="flex items-center justify-between text-sm text-primary font-semibold">
-                    Open Playlist
-                    <ExternalLink className="h-4 w-4" />
-                  </div>
-                </CardContent>
-              </Card>
-            </a>
+                    <CardTitle className="text-xl">{playlist.title}</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <p className="text-sm text-muted-foreground leading-relaxed">
+                      {playlist.description}
+                    </p>
+                    <div className="flex items-center justify-between text-sm text-primary font-semibold">
+                      Open Playlist
+                      <ExternalLink className="h-4 w-4" />
+                    </div>
+                  </CardContent>
+                </Card>
+              </a>
+            ))}
             {playlistsWithCounts.map((playlist) => (
               <PlaylistCard key={playlist.id} playlist={playlist} />
             ))}
           </div>
         ) : (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <a
-              href={featuredPlaylistUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="block h-full"
-            >
-              <Card className="hover:shadow-lg transition-shadow h-full">
-                <CardHeader>
-                  <div className="flex items-start justify-between gap-4 mb-2">
-                    <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-                      <Music2 className="h-6 w-6 text-primary" />
+            {featuredPlaylists.map((playlist) => (
+              <a
+                key={playlist.title}
+                href={playlist.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block h-full"
+              >
+                <Card className="hover:shadow-lg transition-shadow h-full">
+                  <CardHeader>
+                    <div className="flex items-start justify-between gap-4 mb-2">
+                      <SiteLogo size={48} className="bg-primary/10 p-1 rounded-lg" />
+                      <Badge variant="secondary">{playlist.badge}</Badge>
                     </div>
-                    <Badge variant="secondary">Featured</Badge>
-                  </div>
-                  <CardTitle className="text-xl">Album Club Official Playlist</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <p className="text-sm text-muted-foreground leading-relaxed">
-                    Curated highlights of recent picks. Opens on Spotify and keeps everyone in sync.
-                  </p>
-                  <div className="flex items-center justify-between text-sm text-primary font-semibold">
-                    Open Playlist
-                    <ExternalLink className="h-4 w-4" />
-                  </div>
-                </CardContent>
-              </Card>
-            </a>
+                    <CardTitle className="text-xl">{playlist.title}</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <p className="text-sm text-muted-foreground leading-relaxed">
+                      {playlist.description}
+                    </p>
+                    <div className="flex items-center justify-between text-sm text-primary font-semibold">
+                      Open Playlist
+                      <ExternalLink className="h-4 w-4" />
+                    </div>
+                  </CardContent>
+                </Card>
+              </a>
+            ))}
             <Card>
               <CardContent className="p-12 text-center">
                 <ListMusic className="h-12 w-12 mx-auto text-muted-foreground mb-4" />

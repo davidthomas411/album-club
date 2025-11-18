@@ -14,7 +14,7 @@ import { Label } from "@/components/ui/label"
 import Link from "next/link"
 import { useRouter } from 'next/navigation'
 import { useState } from "react"
-import { Music2 } from 'lucide-react'
+import { SiteLogo } from '@/components/site-logo'
 
 export default function SignUpPage() {
   const [email, setEmail] = useState("")
@@ -64,7 +64,7 @@ export default function SignUpPage() {
       <div className="w-full max-w-md space-y-6">
         <div className="flex justify-center">
           <Link href="/" className="flex items-center gap-2">
-            <Music2 className="h-10 w-10 text-primary" />
+            <SiteLogo size={56} className="bg-primary/10 p-2 rounded-full" />
             <span className="text-2xl font-bold text-foreground">AlbumClub</span>
           </Link>
         </div>

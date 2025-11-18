@@ -1,5 +1,10 @@
-import { list } from '@vercel/blob'
 import { NextResponse } from 'next/server'
+import { createServerClient } from '@/lib/supabase/server'
+
+const FACE_BUCKET =
+  process.env.NEXT_PUBLIC_SUPABASE_FACE_BUCKET || 'faces'
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
 
 export async function GET(request: Request) {
   try {
@@ -13,22 +18,44 @@ export async function GET(request: Request) {
       )
     }
 
-    // List all files in the member's folder
-    const { blobs } = await list({
-      prefix: `faces/${memberName}/`,
-    })
+    const supabase = await createServerClient()
+    const storageClient = supabase.storage.from(FACE_BUCKET)
 
-    // Create a map of filename to URL
+    const { data: files, error } = await storageClient
+      .list(memberName, {
+        limit: 500,
+        sortBy: { column: 'name', order: 'asc' },
+      })
+
+    if (error) {
+      console.error('[v0] Supabase storage error:', error)
+      return NextResponse.json(
+        { error: 'Failed to list images' },
+        { status: 500 }
+      )
+    }
+
     const imageMap: Record<string, string> = {}
-    blobs.forEach((blob) => {
-      // Extract just the filename from the full path
-      const filename = blob.pathname.split('/').pop()
-      if (filename) {
-        imageMap[filename] = blob.url
-      }
-    })
 
-    console.log('[v0] Found face images for', memberName, ':', Object.keys(imageMap).length)
+    for (const file of files || []) {
+      if (!file.name) continue
+      const { data: publicUrl } = storageClient.getPublicUrl(
+        `${memberName}/${file.name}`,
+      )
+      if (publicUrl?.publicUrl) {
+        const version = file.updated_at
+          ? new Date(file.updated_at).getTime()
+          : Date.now()
+        imageMap[file.name] = `${publicUrl.publicUrl}?v=${version}`
+      }
+    }
+
+    console.log(
+      '[v0] Found face images for',
+      memberName,
+      ':',
+      Object.keys(imageMap).length
+    )
 
     return NextResponse.json({ images: imageMap })
   } catch (error) {

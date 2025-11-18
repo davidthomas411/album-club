@@ -6,7 +6,15 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Trash2, UserPlus, Home, Database } from 'lucide-react'
+import { Textarea } from '@/components/ui/textarea'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { Trash2, UserPlus, Home, Database, Edit } from 'lucide-react'
 import Link from 'next/link'
 import { Checkbox } from '@/components/ui/checkbox'
 
@@ -27,6 +35,15 @@ export default function UsersAdminPage() {
   const [whatsappNumber, setWhatsappNumber] = useState('')
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [deleting, setDeleting] = useState(false)
+  const [editingProfileId, setEditingProfileId] = useState<string | null>(null)
+  const [faceFolders, setFaceFolders] = useState<string[]>([])
+  const [editForm, setEditForm] = useState({
+    display_name: '',
+    whatsapp_number: '',
+    bio: '',
+    face_images_folder: '',
+    avatar_url: '',
+  })
   const supabase = createBrowserClient()
 
   async function fetchUsers() {
@@ -42,6 +59,20 @@ export default function UsersAdminPage() {
 
   useEffect(() => {
     fetchUsers()
+  }, [])
+
+  useEffect(() => {
+    async function fetchFolders() {
+      try {
+        const response = await fetch('/api/list-face-folders')
+        if (!response.ok) return
+        const data = await response.json()
+        setFaceFolders(data.folders || [])
+      } catch (error) {
+        console.error('[v0] Failed to fetch face folders:', error)
+      }
+    }
+    fetchFolders()
   }, [])
 
   async function addUser() {
@@ -195,6 +226,47 @@ export default function UsersAdminPage() {
     }
   }
 
+  function startEditing(profile: Profile) {
+    setEditingProfileId(profile.id)
+    setEditForm({
+      display_name: profile.display_name || '',
+      whatsapp_number: profile.whatsapp_number || '',
+      bio: profile.bio || '',
+      face_images_folder: profile.face_images_folder || '',
+      avatar_url: profile.avatar_url || '',
+    })
+  }
+
+  function cancelEditing() {
+    setEditingProfileId(null)
+  }
+
+  async function saveProfileChanges(id: string) {
+    if (!editForm.display_name.trim()) {
+      alert('Display name is required')
+      return
+    }
+
+    const { error } = await supabase
+      .from('profiles')
+      .update({
+        display_name: editForm.display_name.trim(),
+        whatsapp_number: editForm.whatsapp_number || null,
+        bio: editForm.bio || null,
+        face_images_folder: editForm.face_images_folder || null,
+        avatar_url: editForm.avatar_url || null,
+      })
+      .eq('id', id)
+
+    if (error) {
+      alert('Failed to update profile: ' + error.message)
+      return
+    }
+
+    await fetchUsers()
+    setEditingProfileId(null)
+  }
+
   return (
     <div className="min-h-screen bg-background p-4 md:p-8">
       <div className="max-w-7xl mx-auto">
@@ -309,35 +381,165 @@ export default function UsersAdminPage() {
                             </span>
                           </div>
                         )}
-                        <div>
-                          <h3 className="font-bold text-foreground">{profile.display_name}</h3>
-                          <div className="text-sm text-muted-foreground space-y-1">
-                            {profile.whatsapp_number && (
-                              <p><strong>WhatsApp:</strong> {profile.whatsapp_number}</p>
-                            )}
-                            {profile.bio && (
-                              <p><strong>Bio:</strong> {profile.bio}</p>
-                            )}
-                            {profile.face_images_folder && (
-                              <p><strong>Face Folder:</strong> {profile.face_images_folder}</p>
-                            )}
-                            <p><strong>Joined:</strong> {new Date(profile.created_at).toLocaleDateString()}</p>
-                            <p className="text-xs opacity-70"><strong>ID:</strong> {profile.id}</p>
-                          </div>
+                        <div className="flex-1">
+                          {editingProfileId === profile.id ? (
+                            <div className="space-y-3">
+                              <div className="grid gap-3 md:grid-cols-2">
+                                <div>
+                                  <Label htmlFor={`display-${profile.id}`}>Display Name</Label>
+                                  <Input
+                                    id={`display-${profile.id}`}
+                                    value={editForm.display_name}
+                                    onChange={(e) =>
+                                      setEditForm((prev) => ({ ...prev, display_name: e.target.value }))
+                                    }
+                                  />
+                                </div>
+                                <div>
+                                  <Label htmlFor={`whatsapp-${profile.id}`}>WhatsApp</Label>
+                                  <Input
+                                    id={`whatsapp-${profile.id}`}
+                                    value={editForm.whatsapp_number}
+                                    onChange={(e) =>
+                                      setEditForm((prev) => ({ ...prev, whatsapp_number: e.target.value }))
+                                    }
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <Label htmlFor={`face-${profile.id}`}>Face Folder</Label>
+                                  {faceFolders.length > 0 && (
+                                    <div className="space-y-1">
+                                      <Select
+                                        value={editForm.face_images_folder || ''}
+                                        onValueChange={(value) =>
+                                          setEditForm((prev) => ({
+                                            ...prev,
+                                            face_images_folder: value || '',
+                                          }))
+                                        }
+                                      >
+                                        <SelectTrigger>
+                                          <SelectValue placeholder="Choose existing folder" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="">None</SelectItem>
+                                          {faceFolders.map((folder) => (
+                                            <SelectItem key={folder} value={folder}>
+                                              {folder}
+                                            </SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                      <p className="text-xs text-muted-foreground">
+                                        Choose an existing folder or type a custom name below.
+                                      </p>
+                                    </div>
+                                  )}
+                                  <Input
+                                    id={`face-${profile.id}`}
+                                    value={editForm.face_images_folder}
+                                    onChange={(e) =>
+                                      setEditForm((prev) => ({
+                                        ...prev,
+                                        face_images_folder: e.target.value,
+                                      }))
+                                    }
+                                    placeholder="e.g. neil"
+                                  />
+                                </div>
+                                <div>
+                                  <Label htmlFor={`avatar-${profile.id}`}>Avatar URL</Label>
+                                  <Input
+                                    id={`avatar-${profile.id}`}
+                                    value={editForm.avatar_url}
+                                    onChange={(e) =>
+                                      setEditForm((prev) => ({ ...prev, avatar_url: e.target.value }))
+                                    }
+                                  />
+                                </div>
+                              </div>
+                              <div>
+                                <Label htmlFor={`bio-${profile.id}`}>Bio</Label>
+                                <Textarea
+                                  id={`bio-${profile.id}`}
+                                  value={editForm.bio}
+                                  onChange={(e) =>
+                                    setEditForm((prev) => ({ ...prev, bio: e.target.value }))
+                                  }
+                                  rows={3}
+                                />
+                              </div>
+                            </div>
+                          ) : (
+                            <div>
+                              <h3 className="font-bold text-foreground">{profile.display_name}</h3>
+                              <div className="text-sm text-muted-foreground space-y-1">
+                                {profile.whatsapp_number && (
+                                  <p><strong>WhatsApp:</strong> {profile.whatsapp_number}</p>
+                                )}
+                                {profile.bio && (
+                                  <p><strong>Bio:</strong> {profile.bio}</p>
+                                )}
+                                {profile.face_images_folder && (
+                                  <p><strong>Face Folder:</strong> {profile.face_images_folder}</p>
+                                )}
+                                {profile.avatar_url && (
+                                  <p className="truncate"><strong>Avatar:</strong> {profile.avatar_url}</p>
+                                )}
+                                <p><strong>Joined:</strong> {new Date(profile.created_at).toLocaleDateString()}</p>
+                                <p className="text-xs opacity-70"><strong>ID:</strong> {profile.id}</p>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          if (confirm(`Delete ${profile.display_name}? This will also delete all their picks and themes.`)) {
-                            deleteUser(profile.id)
-                          }
-                        }}
-                        disabled={deleting}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      <div className="flex gap-2">
+                        {editingProfileId === profile.id ? (
+                          <>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={cancelEditing}
+                              disabled={deleting}
+                            >
+                              Cancel
+                            </Button>
+                            <Button
+                              size="sm"
+                              onClick={() => saveProfileChanges(profile.id)}
+                              disabled={deleting}
+                            >
+                              Save
+                            </Button>
+                          </>
+                        ) : (
+                          <>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => startEditing(profile)}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                if (
+                                  confirm(
+                                    `Delete ${profile.display_name}? This will also delete all their picks and themes.`,
+                                  )
+                                ) {
+                                  deleteUser(profile.id)
+                                }
+                              }}
+                              disabled={deleting}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </>
+                        )}
+                      </div>
                     </div>
                   </div>
                 ))}

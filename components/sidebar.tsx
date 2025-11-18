@@ -2,7 +2,9 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, ListMusic, Plus, Search, Shield, X, Music2, SlidersHorizontal, LogIn, UserPlus } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Home, ListMusic, Plus, Search, Shield, X, Music, SlidersHorizontal, LogIn, UserPlus } from 'lucide-react'
+import { createBrowserClient } from '@/lib/supabase/client'
 
 interface SidebarProps {
   onClose?: () => void
@@ -10,10 +12,41 @@ interface SidebarProps {
 
 export function Sidebar({ onClose }: SidebarProps) {
   const pathname = usePathname()
+  const [userName, setUserName] = useState<string | null>(null)
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
+  const supabase = createBrowserClient()
+
+  useEffect(() => {
+    let isMounted = true
+    supabase.auth.getUser().then(({ data }) => {
+      if (!isMounted) return
+      if (data.user) {
+        setUserName(
+          (data.user.user_metadata as Record<string, string> | undefined)?.display_name ||
+            data.user.email ||
+            null,
+        )
+        setAvatarUrl(
+          (data.user.user_metadata as Record<string, string> | undefined)?.avatar_url || null,
+        )
+      } else {
+        setUserName(null)
+        setAvatarUrl(null)
+      }
+    })
+    return () => {
+      isMounted = false
+    }
+  }, [supabase])
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut()
+    window.location.href = '/auth/login'
+  }
 
   const links = [
     { href: '/', label: 'Home', icon: Home },
-    { href: '/feed', label: 'Feed', icon: Music2 },
+    { href: '/feed', label: 'Feed', icon: Music },
     { href: '/playlists', label: 'Playlists', icon: ListMusic },
     { href: '/search', label: 'Search', icon: Search },
     { href: '/admin', label: 'Admin', icon: Shield },
@@ -68,24 +101,52 @@ export function Sidebar({ onClose }: SidebarProps) {
 
       {/* Bottom section */}
       <div className="mt-auto pt-6 border-t border-border space-y-3">
-        <div className="flex flex-col gap-2">
-          <Link
-            href="/auth/login"
-            className="flex items-center justify-center gap-2 rounded-md border border-border px-4 py-2 text-sm font-semibold hover:border-primary hover:text-foreground transition-colors"
-            onClick={onClose}
-          >
-            <LogIn className="w-4 h-4" />
-            Log in
-          </Link>
-          <Link
-            href="/auth/sign-up"
-            className="flex items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-black hover:bg-primary-hover transition-colors"
-            onClick={onClose}
-          >
-            <UserPlus className="w-4 h-4" />
-            Create account
-          </Link>
-        </div>
+        {userName ? (
+          <div className="space-y-3">
+            <div className="flex items-center gap-3">
+              {avatarUrl ? (
+                <img
+                  src={avatarUrl}
+                  alt={userName}
+                  className="w-10 h-10 rounded-full object-cover"
+                />
+              ) : (
+                <div className="w-10 h-10 rounded-full bg-surface-hover flex items-center justify-center text-lg font-bold">
+                  {userName.charAt(0).toUpperCase()}
+                </div>
+              )}
+              <div>
+                <p className="text-sm font-semibold text-foreground">{userName}</p>
+                <p className="text-xs text-muted-foreground">Signed in</p>
+              </div>
+            </div>
+            <button
+              onClick={handleLogout}
+              className="w-full rounded-md border border-border px-4 py-2 text-sm font-semibold hover:border-primary hover:text-foreground transition-colors"
+            >
+              Log out
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2">
+            <Link
+              href="/auth/login"
+              className="flex items-center justify-center gap-2 rounded-md border border-border px-4 py-2 text-sm font-semibold hover:border-primary hover:text-foreground transition-colors"
+              onClick={onClose}
+            >
+              <LogIn className="w-4 h-4" />
+              Log in
+            </Link>
+            <Link
+              href="/auth/sign-up"
+              className="flex items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-black hover:bg-primary-hover transition-colors"
+              onClick={onClose}
+            >
+              <UserPlus className="w-4 h-4" />
+              Create account
+            </Link>
+          </div>
+        )}
         <p className="text-sm text-muted-foreground text-center">
           Share music from any platform
         </p>

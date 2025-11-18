@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { AddPickForm } from '@/components/add-pick-form'
-import { Music2 } from 'lucide-react'
+import { SiteLogo } from '@/components/site-logo'
 import Link from 'next/link'
 
 export default async function AddPickPage() {
@@ -17,7 +17,7 @@ export default async function AddPickPage() {
       <header className="border-b border-border bg-card">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2">
-            <Music2 className="h-8 w-8 text-primary" />
+            <SiteLogo size={40} className="bg-primary/10 p-1" />
             <h1 className="text-2xl font-bold text-foreground">AlbumClub</h1>
           </Link>
         </div>

@@ -17,8 +17,6 @@ export default function UploadFacesPage() {
     setUploading(true)
     setUploadedCount(0)
 
-    const uploadedUrls: { filename: string; url: string }[] = []
-
     for (let i = 0; i < files.length; i++) {
       const file = files[i]
       const formData = new FormData()
@@ -33,26 +31,11 @@ export default function UploadFacesPage() {
         })
 
         if (response.ok) {
-          const data = await response.json()
-          uploadedUrls.push({ filename: file.name, url: data.url })
           setUploadedCount(i + 1)
         }
       } catch (error) {
         console.error('[v0] Upload error:', error)
       }
-    }
-
-    try {
-      await fetch('/api/save-face-urls', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          memberName: memberName.toLowerCase(),
-          urls: uploadedUrls
-        })
-      })
-    } catch (error) {
-      console.error('[v0] Error saving URLs:', error)
     }
 
     setUploading(false)
@@ -100,7 +83,7 @@ export default function UploadFacesPage() {
           >
             {uploading
               ? `Uploading... ${uploadedCount}/${files?.length || 0}`
-              : 'Upload to Vercel Blob'}
+              : 'Upload to Supabase Storage'}
           </Button>
 
           <div className="text-sm text-zinc-400 space-y-2">
@@ -108,7 +91,7 @@ export default function UploadFacesPage() {
             <ol className="list-decimal list-inside space-y-1">
               <li>Enter the member's name (lowercase)</li>
               <li>Select all 122 face_looker images at once</li>
-              <li>Click upload - images will be stored in Vercel Blob</li>
+              <li>Click upload - images will be stored in Supabase Storage</li>
               <li>The face tracker will automatically use the uploaded images</li>
             </ol>
           </div>

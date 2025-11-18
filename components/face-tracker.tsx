@@ -12,6 +12,7 @@ interface FaceTrackerProps {
   autoAnimationInterval?: [number, number]
   autoAnimate?: boolean
   disablePointerTracking?: boolean
+  fallbackBasePath?: string
   initialDirection?: {
     x: number
     y: number
@@ -58,6 +59,7 @@ export function FaceTracker({
   autoAnimate = false,
   autoAnimationInterval,
   disablePointerTracking = false,
+  fallbackBasePath,
   initialDirection,
 }: FaceTrackerProps) {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -101,7 +103,11 @@ export function FaceTracker({
 
       const filename = gridToFilename(px, py, size)
       
-      const imagePath = blobUrls?.[filename] || `/faces/${memberFolder}/${filename}`
+      const imagePath =
+        blobUrls?.[filename] ||
+        (fallbackBasePath
+          ? `${fallbackBasePath}/${filename}`
+          : `/faces/${memberFolder}/${filename}`)
 
       img.src = imagePath
 
@@ -124,7 +130,11 @@ export function FaceTracker({
       const py = quantizeToGrid(clampedY)
 
       const filename = gridToFilename(px, py, size)
-      const imagePath = blobUrls?.[filename] || `/faces/${memberFolder}/${filename}`
+      const imagePath =
+        blobUrls?.[filename] ||
+        (fallbackBasePath
+          ? `${fallbackBasePath}/${filename}`
+          : `/faces/${memberFolder}/${filename}`)
       img.src = imagePath
     }
 
@@ -230,6 +240,7 @@ export function FaceTracker({
     disablePointerTracking,
     minAutoDelay,
     maxAutoDelay,
+    fallbackBasePath,
     initialDirection,
   ])
 

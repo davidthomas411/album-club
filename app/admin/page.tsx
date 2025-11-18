@@ -5,7 +5,7 @@ import { createBrowserClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Trash2, Edit, RefreshCw, Home } from 'lucide-react'
+import { Trash2, Edit, RefreshCw, Home, Upload } from 'lucide-react'
 import Link from 'next/link'
 
 interface MusicPick {
@@ -120,6 +120,12 @@ export default function AdminPage() {
             <Link href="/admin/users">
               <Button variant="outline" size="sm">
                 Users
+              </Button>
+            </Link>
+            <Link href="/admin/upload-faces">
+              <Button variant="outline" size="sm">
+                <Upload className="h-4 w-4 mr-2" />
+                Upload Faces
               </Button>
             </Link>
             <Button onClick={fetchData} disabled={loading} size="sm">

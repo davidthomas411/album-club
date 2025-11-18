@@ -29,12 +29,13 @@ export async function updateSession(request: NextRequest) {
     }
   );
 
-  const publicRoutes = ["/", "/feed", "/playlists"];
-  const isPublicRoute = publicRoutes.some(route => 
-    request.nextUrl.pathname === route || request.nextUrl.pathname.startsWith(route + "/")
-  );
-  
-  if (isPublicRoute || request.nextUrl.pathname.startsWith("/auth")) {
+  const publicRoutes = ["/auth/login", "/auth/sign-up", "/auth/error"];
+  const isPublicRoute = publicRoutes.some(route =>
+    request.nextUrl.pathname === route ||
+    request.nextUrl.pathname.startsWith(route + "/"),
+  )
+
+  if (isPublicRoute) {
     return supabaseResponse;
   }
 

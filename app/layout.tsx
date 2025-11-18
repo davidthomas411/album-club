@@ -42,6 +42,9 @@ export default function RootLayout({
     <html lang="en">
       <body className={`${inter.className} antialiased`}>
         {children}
+        <footer className="text-center text-xs text-muted-foreground py-6">
+          Credit: Sunny Boy Productions
+        </footer>
         <Analytics />
       </body>
     </html>

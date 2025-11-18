@@ -1,6 +1,7 @@
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Music2, ExternalLink } from 'lucide-react'
+import { ExternalLink } from 'lucide-react'
+import { SiteLogo } from '@/components/site-logo'
 import { Button } from '@/components/ui/button'
 
 interface MusicPick {
@@ -61,9 +62,7 @@ export function MusicPickCard({ pick }: MusicPickCardProps) {
                 className="h-12 w-12 rounded-full object-cover"
               />
             ) : (
-              <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center">
-                <Music2 className="h-6 w-6 text-muted-foreground" />
-              </div>
+              <SiteLogo size={48} className="bg-primary/10 p-1 rounded-full" />
             )}
           </div>
 

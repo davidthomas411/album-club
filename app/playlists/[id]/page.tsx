@@ -3,9 +3,10 @@ import { createClient } from '@/lib/supabase/server'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Music2, Users, ExternalLink, Plus } from 'lucide-react'
+import { Users, ExternalLink, Plus } from 'lucide-react'
 import Link from 'next/link'
 import { AddToPlaylistButton } from '@/components/add-to-playlist-button'
+import { SiteLogo } from '@/components/site-logo'
 
 export default async function PlaylistDetailPage({
   params,
@@ -66,7 +67,7 @@ export default async function PlaylistDetailPage({
       <header className="border-b border-border bg-card">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2">
-            <Music2 className="h-8 w-8 text-primary" />
+            <SiteLogo size={40} className="bg-primary/10 p-1" />
             <h1 className="text-2xl font-bold text-foreground">AlbumClub</h1>
           </Link>
           <nav className="flex items-center gap-4">
@@ -81,9 +82,7 @@ export default async function PlaylistDetailPage({
         {/* Playlist Header */}
         <div className="mb-8">
           <div className="flex items-start gap-6 mb-6">
-            <div className="h-24 w-24 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-              <Music2 className="h-12 w-12 text-primary" />
-            </div>
+            <SiteLogo size={96} className="bg-primary/10 p-2 rounded-lg flex-shrink-0" />
             <div className="flex-1">
               <div className="flex items-center gap-3 mb-2">
                 <h2 className="text-4xl font-bold text-foreground">
@@ -168,7 +167,7 @@ export default async function PlaylistDetailPage({
         ) : (
           <Card>
             <CardContent className="p-12 text-center">
-              <Music2 className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+              <SiteLogo size={64} className="mx-auto mb-4 bg-primary/10 p-2 rounded-full" />
               <p className="text-lg text-muted-foreground">
                 No tracks in this playlist yet
               </p>
