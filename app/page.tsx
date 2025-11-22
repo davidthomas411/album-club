@@ -3,7 +3,7 @@
 import { Sidebar } from '@/components/sidebar'
 import { FaceTracker } from '@/components/face-tracker'
 import { Music, Play, Menu, ExternalLink } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo, CSSProperties } from 'react'
 import { createBrowserClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 
@@ -47,6 +47,82 @@ const CORE_MEMBERS = [
 const storageBase = process.env.NEXT_PUBLIC_SUPABASE_URL
   ? `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${process.env.NEXT_PUBLIC_SUPABASE_FACE_BUCKET || 'faces'}`
   : null
+
+function VinylArtwork({
+  artworkUrl,
+  alt,
+  seed,
+}: {
+  artworkUrl?: string | null
+  alt: string
+  seed?: string
+}) {
+  const hash = useMemo(() => hashSeed(seed || alt || 'vinyl'), [seed, alt])
+
+  const wearRotation = useMemo(
+    () => 0,
+    [hash]
+  )
+  const wearShiftX = useMemo(
+    () => 0,
+    [hash]
+  )
+  const wearShiftY = useMemo(
+    () => 0,
+    [hash]
+  )
+  const wearOpacity = useMemo(
+    () => 0.7,
+    [hash]
+  )
+  const edgeWear = useMemo(
+    () => 0.1,
+    [hash]
+  )
+  const edgeShadow = useMemo(
+    () => 0.32,
+    [hash]
+  )
+  const ringShadow = useMemo(
+    () => 0.52,
+    [hash]
+  )
+  const leftFade = useMemo(
+    () => 0.1,
+    [hash]
+  )
+  const midWear = useMemo(
+    () => 0.14,
+    [hash]
+  )
+
+  const artStyles: CSSProperties = {
+    ['--cover-art' as string]: artworkUrl ? `url(${artworkUrl})` : undefined,
+    ['--label-art' as string]: artworkUrl ? `url(${artworkUrl})` : undefined,
+    ['--wear-shift-x' as string]: `${wearShiftX}px`,
+    ['--wear-shift-y' as string]: `${wearShiftY}px`,
+    ['--wear-opacity' as string]: wearOpacity,
+    ['--edge-wear-strength' as string]: edgeWear,
+    ['--edge-wear-shadow' as string]: edgeShadow,
+    ['--ring-shadow-alpha' as string]: ringShadow,
+    ['--left-fade-strength' as string]: leftFade,
+    ['--mid-wear-strength' as string]: midWear,
+  }
+
+  return (
+    <div className="vinyl-card" style={artStyles} role="img" aria-label={alt}>
+      <div className="vinyl-record" aria-hidden="true">
+        <div className="vinyl-label" />
+      </div>
+      <div className="vinyl-sleeve">
+        <div className="vinyl-ring" aria-hidden="true" />
+        <div className="vinyl-scuffs" aria-hidden="true" />
+        <div className="vinyl-creases" aria-hidden="true" />
+        <div className="vinyl-damage" aria-hidden="true" />
+      </div>
+    </div>
+  )
+}
 
 export default function HomePage() {
   const [currentTheme, setCurrentTheme] = useState<WeeklyTheme | null>(null)
@@ -321,21 +397,23 @@ export default function HomePage() {
                     className="group bg-surface hover:bg-surface-hover p-5 md:p-6 rounded-lg transition-all duration-300 cursor-pointer flex flex-col"
                   >
                     {/* Album artwork - no face tracker here */}
-                    <div className="relative mb-5 md:mb-6 aspect-square overflow-hidden rounded shadow-lg">
-                      {pick.album_artwork_url ? (
-                        <img 
-                          src={pick.album_artwork_url || "/placeholder.svg"} 
-                          alt={`${pick.album} by ${pick.artist}`}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <div className="w-full h-full bg-surface-hover flex items-center justify-center">
-                          <Music className="w-16 md:w-20 h-16 md:h-20 text-muted-foreground" />
+                    <div className="relative mb-5 md:mb-6">
+                      <VinylArtwork
+                        artworkUrl={pick.album_artwork_url}
+                        alt={`${pick.album} by ${pick.artist}`}
+                        seed={pick.id}
+                      />
+
+                      {!pick.album_artwork_url && (
+                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                          <div className="rounded-full bg-background/80 border border-white/10 shadow-lg p-3">
+                            <Music className="w-12 md:w-14 h-12 md:h-14 text-muted-foreground" />
+                          </div>
                         </div>
                       )}
                       
                       {/* Play button overlay on hover */}
-                      <div className="hidden md:block absolute bottom-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                      <div className="hidden md:block absolute bottom-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-20">
                         <div className="w-14 h-14 rounded-full bg-primary flex items-center justify-center shadow-xl hover:scale-110 transition-transform">
                           <Play className="w-7 h-7 text-black fill-black ml-0.5" />
                         </div>
@@ -478,4 +556,18 @@ export default function HomePage() {
       </main>
     </div>
   )
+}
+
+function hashSeed(str: string) {
+  let hash = 0
+  for (let i = 0; i < str.length; i++) {
+    hash = (hash << 5) - hash + str.charCodeAt(i)
+    hash |= 0
+  }
+  return Math.abs(hash) + 1
+}
+
+function seededRandom(seed: number, offset = 0) {
+  const x = Math.sin(seed + offset) * 10000
+  return x - Math.floor(x)
 }
