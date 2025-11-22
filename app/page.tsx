@@ -52,10 +52,16 @@ function VinylArtwork({
   artworkUrl,
   alt,
   seed,
+  title,
+  showTitleRing = false,
+  labelArt,
 }: {
   artworkUrl?: string | null
   alt: string
   seed?: string
+  title?: string | null
+  showTitleRing?: boolean
+  labelArt?: string | null
 }) {
   const hash = useMemo(() => hashSeed(seed || alt || 'vinyl'), [seed, alt])
 
@@ -98,7 +104,11 @@ function VinylArtwork({
 
   const artStyles: CSSProperties = {
     ['--cover-art' as string]: artworkUrl ? `url(${artworkUrl})` : undefined,
-    ['--label-art' as string]: artworkUrl ? `url(${artworkUrl})` : undefined,
+    ['--label-art' as string]: labelArt
+      ? labelArt
+      : artworkUrl
+      ? `url(${artworkUrl})`
+      : undefined,
     ['--wear-shift-x' as string]: `${wearShiftX}px`,
     ['--wear-shift-y' as string]: `${wearShiftY}px`,
     ['--wear-opacity' as string]: wearOpacity,
@@ -113,6 +123,23 @@ function VinylArtwork({
     <div className="vinyl-card" style={artStyles} role="img" aria-label={alt}>
       <div className="vinyl-record" aria-hidden="true">
         <div className="vinyl-label" />
+        {showTitleRing && title ? (
+          <div className="vinyl-title-ring" aria-hidden="true">
+            {title.split('').map((char, idx) => {
+              const angle = (idx / Math.max(title.length, 1)) * 360
+              return (
+                <span
+                  key={`${char}-${idx}`}
+                  style={{
+                    transform: `rotate(${angle}deg) translateY(-50%) rotate(90deg)`,
+                  }}
+                >
+                  {char}
+                </span>
+              )
+            })}
+          </div>
+        ) : null}
       </div>
       <div className="vinyl-sleeve">
         <div className="vinyl-ring" aria-hidden="true" />
@@ -326,6 +353,7 @@ export default function HomePage() {
     currentTheme?.curator?.display_name ||
     curatorMember?.displayName ||
     'Curator'
+  const latestPick = weeklyPicks[0] || recentPicks[0] || null
 
   return (
     <div className="flex min-h-screen bg-background overflow-x-hidden">
@@ -378,16 +406,44 @@ export default function HomePage() {
               <p className="text-base md:text-lg text-muted-foreground">
                 {currentTheme ? `Curated by ${curatorName}` : `Curated by ${curatorMember.displayName}`}
               </p>
-              <div className="mt-4">
+              <div className="mt-4 flex flex-wrap items-center justify-center md:justify-start gap-3">
                 <Link href="/set-theme">
                   <button className="bg-primary hover:bg-primary-hover text-black font-semibold py-3 px-6 md:px-8 rounded-full transition-all text-base whitespace-nowrap">
                     {currentTheme ? 'Set New Theme' : 'Set Theme'}
                   </button>
                 </Link>
+                <Link href="/feed">
+                  <button className="bg-surface hover:bg-surface-hover text-foreground font-semibold py-3 px-6 md:px-8 rounded-full border border-white/10 transition-all text-base whitespace-nowrap">
+                    View Feed
+                  </button>
+                </Link>
               </div>
             </div>
+            {latestPick && (
+              <div className="hero-latest group">
+                <div className="hero-latest__glow" />
+                <div className="hero-latest__card">
+                  <VinylArtwork
+                    artworkUrl={latestPick.album_artwork_url}
+                    alt={`${latestPick.album} by ${latestPick.artist}`}
+                    seed={`hero-${latestPick.id}`}
+                  />
+                  <div className="hero-latest__info">
+                    <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Latest pick</p>
+                    <p className="text-sm font-semibold text-foreground line-clamp-1">
+                      {latestPick.album || latestPick.title || 'Untitled'}
+                    </p>
+                    <p className="text-xs text-muted-foreground line-clamp-1">
+                      {latestPick.artist || 'Unknown'}
+                    </p>
+                  </div>
+                  <div className="hero-latest__shine" />
+                </div>
+              </div>
+            )}
           </div>
         </section>
+
 
         <section>
           <div className="flex items-center justify-between mb-6 md:mb-8">
