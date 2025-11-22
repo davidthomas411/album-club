@@ -20,13 +20,27 @@ export async function GET(request: NextRequest) {
       data: { user },
     } = await supabase.auth.getUser()
 
-    const preferredPlatform =
+    const preferredPlatformRaw =
       (user?.user_metadata as Record<string, string | undefined> | undefined)?.preferred_platform
+    const preferredPlatform = preferredPlatformRaw?.trim().toLowerCase() || null
 
     if (preferredPlatform) {
-      const preferredUrl = await resolvePlatformUrl(targetUrl, preferredPlatform)
-      if (preferredUrl) {
-        targetUrl = preferredUrl
+      const alreadyMatches =
+        (preferredPlatform === 'tidal' && targetUrl.includes('tidal.com')) ||
+        (preferredPlatform === 'spotify' && targetUrl.includes('spotify.com')) ||
+        (preferredPlatform === 'apple_music' && targetUrl.includes('music.apple.com')) ||
+        (preferredPlatform === 'youtube_music' && targetUrl.includes('music.youtube.com')) ||
+        (preferredPlatform === 'soundcloud' && targetUrl.includes('soundcloud.com')) ||
+        (preferredPlatform === 'deezer' && targetUrl.includes('deezer.com'))
+
+      if (!alreadyMatches) {
+        const preferredUrl = await resolvePlatformUrl(targetUrl, preferredPlatform)
+        if (preferredUrl) {
+          targetUrl = preferredUrl
+        } else {
+          // If we can't resolve, send to song.link chooser with preferred platform hint
+          targetUrl = `https://song.link/${encodeURIComponent(targetUrl)}?platform=${encodeURIComponent(preferredPlatform)}`
+        }
       }
     }
   } catch (error) {

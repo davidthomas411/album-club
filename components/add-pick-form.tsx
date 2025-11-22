@@ -20,8 +20,16 @@ interface Member {
   display_name: string
 }
 
+interface Theme {
+  id: string
+  theme_name: string
+  week_start_date?: string | null
+  is_active?: boolean | null
+}
+
 interface AddPickFormProps {
   members: Member[]
+  themes?: Theme[]
 }
 
 const platforms = [
@@ -34,7 +42,7 @@ const platforms = [
   { value: 'other', label: 'Other' },
 ]
 
-export function AddPickForm({ members }: AddPickFormProps) {
+export function AddPickForm({ members, themes = [] }: AddPickFormProps) {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -51,26 +59,11 @@ export function AddPickForm({ members }: AddPickFormProps) {
   })
 
   useEffect(() => {
-    const fetchActiveTheme = async () => {
-      const supabase = createClient()
-      const { data } = await supabase
-        .from('weekly_themes')
-        .select('id')
-        .eq('is_active', true)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle()
-      
-      if (data) {
-        console.log('[v0] Found active theme ID:', data.id)
-        setCurrentThemeId(data.id)
-      } else {
-        console.log('[v0] No active theme found')
-        setError('Warning: No active theme found. Your pick may not appear on the homepage.')
-      }
+    if (themes.length > 0) {
+      const active = themes.find((t) => t.is_active)
+      setCurrentThemeId(active?.id || themes[0].id)
     }
-    fetchActiveTheme()
-  }, [])
+  }, [themes])
 
   const fetchMetadataFromUrl = async (url: string) => {
     if (!url || url.length < 10) return
@@ -114,10 +107,10 @@ export function AddPickForm({ members }: AddPickFormProps) {
     e.preventDefault()
     
     if (!currentThemeId) {
-      setError('No active theme found. Please create a theme first.')
+      setError('Please choose a theme before adding a pick.')
       return
     }
-    
+
     setIsLoading(true)
     setError(null)
 
@@ -200,6 +193,31 @@ export function AddPickForm({ members }: AddPickFormProps) {
               />
             </div>
           )}
+
+          {/* Theme Picker */}
+          <div className="space-y-2">
+            <Label htmlFor="theme">Theme *</Label>
+            <Select
+              value={currentThemeId || undefined}
+              onValueChange={(value) => setCurrentThemeId(value)}
+              disabled={themes.length === 0}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select theme" />
+              </SelectTrigger>
+              <SelectContent>
+                {themes.map((theme) => (
+                  <SelectItem key={theme.id} value={theme.id}>
+                    {theme.theme_name} {theme.is_active ? '(Active)' : ''}{' '}
+                    {theme.week_start_date ? `– ${new Date(theme.week_start_date).toLocaleDateString()}` : ''}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {themes.length === 0 && (
+              <p className="text-xs text-muted-foreground">No themes found. Create one first.</p>
+            )}
+          </div>
 
           {/* Member Picker */}
           <div className="space-y-2">

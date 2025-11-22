@@ -3,8 +3,15 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
-import { Home, ListMusic, Plus, Search, Shield, X, Music, SlidersHorizontal, LogIn, UserPlus } from 'lucide-react'
+import { Home, ListMusic, Plus, Search, Shield, X, Music, LogIn, UserPlus } from 'lucide-react'
 import { createBrowserClient } from '@/lib/supabase/client'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 
 interface SidebarProps {
   onClose?: () => void
@@ -14,6 +21,7 @@ export function Sidebar({ onClose }: SidebarProps) {
   const pathname = usePathname()
   const [userName, setUserName] = useState<string | null>(null)
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
+  const [preferredPlatform, setPreferredPlatform] = useState<string | null>(null)
   const supabase = createBrowserClient()
 
   useEffect(() => {
@@ -29,9 +37,13 @@ export function Sidebar({ onClose }: SidebarProps) {
         setAvatarUrl(
           (data.user.user_metadata as Record<string, string> | undefined)?.avatar_url || null,
         )
+        setPreferredPlatform(
+          (data.user.user_metadata as Record<string, string> | undefined)?.preferred_platform || null,
+        )
       } else {
         setUserName(null)
         setAvatarUrl(null)
+        setPreferredPlatform(null)
       }
     })
     return () => {
@@ -50,7 +62,6 @@ export function Sidebar({ onClose }: SidebarProps) {
     { href: '/playlists', label: 'Playlists', icon: ListMusic },
     { href: '/search', label: 'Search', icon: Search },
     { href: '/admin', label: 'Admin', icon: Shield },
-    { href: '/settings', label: 'Preferences', icon: SlidersHorizontal },
   ]
 
   return (
@@ -101,6 +112,44 @@ export function Sidebar({ onClose }: SidebarProps) {
 
       {/* Bottom section */}
       <div className="mt-auto pt-6 border-t border-border space-y-3">
+        {userName && (
+          <div className="space-y-2">
+            <p className="text-xs text-muted-foreground">Preferred platform</p>
+            <Select
+              value={preferredPlatform || undefined}
+              onValueChange={async (value) => {
+                try {
+                  setPreferredPlatform(value)
+                  await supabase.auth.updateUser({
+                    data: { preferred_platform: value },
+                  })
+                } catch (error) {
+                  console.error('[sidebar] Failed to update preference', error)
+                }
+              }}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Choose" />
+              </SelectTrigger>
+              <SelectContent>
+                {[
+                  { value: 'spotify', label: 'Spotify' },
+                  { value: 'tidal', label: 'Tidal' },
+                  { value: 'apple_music', label: 'Apple Music' },
+                  { value: 'youtube_music', label: 'YouTube Music' },
+                  { value: 'soundcloud', label: 'SoundCloud' },
+                  { value: 'deezer', label: 'Deezer' },
+                  { value: 'bandcamp', label: 'Bandcamp' },
+                  { value: 'other', label: 'Other / Browser' },
+                ].map((p) => (
+                  <SelectItem key={p.value} value={p.value}>
+                    {p.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
         {userName ? (
           <div className="space-y-3">
             <div className="flex items-center gap-3">

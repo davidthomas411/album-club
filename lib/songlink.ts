@@ -29,7 +29,8 @@ export async function resolvePlatformUrl(
     return null
   }
 
-  const platformKey = PLATFORM_KEY_MAP[preferredPlatform] ?? preferredPlatform
+  const normalized = preferredPlatform.trim().toLowerCase()
+  const platformKey = PLATFORM_KEY_MAP[normalized] ?? normalized
   if (!platformKey) {
     return null
   }
@@ -40,6 +41,7 @@ export async function resolvePlatformUrl(
     if (cachedUrl) {
       return cachedUrl
     }
+    // If cached but missing the requested platform, fall through to refetch
   }
 
   try {

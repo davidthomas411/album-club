@@ -169,22 +169,27 @@ export default function HomePage() {
           id,
           theme_name,
           theme_description,
+          week_start_date,
+          week_end_date,
+          created_at,
+          is_active,
           curator:curator_id (
             display_name,
             face_images_folder,
             face_blob_prefix
           )
         `)
-        .eq('is_active', true)
+        .order('is_active', { ascending: false })
+        .order('week_start_date', { ascending: false, nullsLast: true })
         .order('created_at', { ascending: false })
         .limit(1)
-        .maybeSingle()
 
-      console.log('[v0] Theme query result:', { data, error })
+      console.log('[v0] Theme query result:', { count: data?.length || 0, error })
 
-      if (!error && data) {
-        console.log('[v0] Found active theme:', data)
-        setCurrentTheme(data)
+      if (!error && data && data.length > 0) {
+        const latestTheme = data[0]
+        console.log('[v0] Selected theme:', latestTheme)
+        setCurrentTheme(latestTheme)
         
         console.log('[v0] Fetching picks for theme:', data.id)
         const { data: picksData, error: picksError } = await supabase
@@ -243,7 +248,7 @@ export default function HomePage() {
           created_at,
           platform_url,
           album_artwork_url,
-          weekly_theme:weekly_theme_id(theme_name),
+          weekly_theme:weekly_theme_id(theme_name, week_start_date),
           user:user_id(display_name, face_blob_prefix)
         `)
         .order('created_at', { ascending: false })
@@ -254,7 +259,12 @@ export default function HomePage() {
         return
       }
       if (data) {
-        setRecentPicks(data)
+        const sorted = [...data].sort((a, b) => {
+          const aDate = a.weekly_theme?.week_start_date || a.created_at || ''
+          const bDate = b.weekly_theme?.week_start_date || b.created_at || ''
+          return bDate.localeCompare(aDate)
+        })
+        setRecentPicks(sorted)
       }
     }
 
@@ -353,7 +363,13 @@ export default function HomePage() {
     currentTheme?.curator?.display_name ||
     curatorMember?.displayName ||
     'Curator'
+  const themeExpired =
+    currentTheme?.week_end_date &&
+    new Date(currentTheme.week_end_date).getTime() < Date.now()
   const latestPick = weeklyPicks[0] || recentPicks[0] || null
+  const latestPickLink = latestPick?.platform_url
+    ? `/link?url=${encodeURIComponent(latestPick.platform_url)}`
+    : null
 
   return (
     <div className="flex min-h-screen bg-background overflow-x-hidden">
@@ -380,9 +396,9 @@ export default function HomePage() {
         </section>
 
         <section className={`mb-8 md:mb-12 bg-gradient-to-r ${currentTheme ? 'from-primary/20 to-primary/5' : 'from-muted/20 to-muted/5'} rounded-lg p-6 md:p-10 relative overflow-hidden`}>
-          <div className="relative z-10 flex flex-col gap-8 md:flex-row md:items-center">
+          <div className="relative z-10 flex flex-col gap-8 md:flex-row md:items-center md:gap-10">
             <div className="flex justify-center md:justify-start">
-              <div className="relative w-36 h-36 md:w-48 md:h-48 rounded-full overflow-hidden border border-white/10 bg-background/70 shadow-2xl">
+              <div className="relative w-32 h-32 sm:w-36 sm:h-36 md:w-48 md:h-48 rounded-full overflow-hidden border border-white/10 bg-background/70 shadow-2xl">
                 <FaceTracker
                   memberFolder={curatorMember.facePrefix}
                   blobUrls={curatorFaceImages}
@@ -393,20 +409,29 @@ export default function HomePage() {
                 />
               </div>
             </div>
-            <div className="flex-1 text-center md:text-left">
-              <p className="text-base md:text-lg text-muted-foreground mb-2">This Week's Theme</p>
-              <h2 className="text-4xl md:text-6xl font-bold text-foreground mb-3">
+            <div className="flex-1 text-center md:text-left items-center md:items-start flex flex-col gap-3">
+              {!themeExpired && (
+                <p className="text-base md:text-lg text-muted-foreground mb-1">
+                  This Week's Theme
+                </p>
+              )}
+              <h2 className="text-4xl md:text-6xl font-bold text-foreground mb-2 text-center md:text-left">
                 {currentTheme ? currentTheme.theme_name : 'No theme set'}
               </h2>
               {currentTheme?.theme_description && (
-                <p className="text-base md:text-lg text-muted-foreground mb-2">
+                <p className="text-base md:text-lg text-muted-foreground mb-1 text-center md:text-left">
                   {currentTheme.theme_description}
                 </p>
               )}
-              <p className="text-base md:text-lg text-muted-foreground">
+              <p className="text-base md:text-lg text-muted-foreground text-center md:text-left">
                 {currentTheme ? `Curated by ${curatorName}` : `Curated by ${curatorMember.displayName}`}
               </p>
-              <div className="mt-4 flex flex-wrap items-center justify-center md:justify-start gap-3">
+              {themeExpired && (
+                <p className="text-xs md:text-sm text-amber-300/80 text-center md:text-left">
+                  This theme ended — set a new one.
+                </p>
+              )}
+              <div className="mt-4 flex flex-wrap items-center justify-center md:justify-start gap-3 w-full">
                 <Link href="/set-theme">
                   <button className="bg-primary hover:bg-primary-hover text-black font-semibold py-3 px-6 md:px-8 rounded-full transition-all text-base whitespace-nowrap">
                     {currentTheme ? 'Set New Theme' : 'Set Theme'}
@@ -420,25 +445,32 @@ export default function HomePage() {
               </div>
             </div>
             {latestPick && (
-              <div className="hero-latest group">
-                <div className="hero-latest__glow" />
-                <div className="hero-latest__card">
-                  <VinylArtwork
-                    artworkUrl={latestPick.album_artwork_url}
-                    alt={`${latestPick.album} by ${latestPick.artist}`}
-                    seed={`hero-${latestPick.id}`}
-                  />
-                  <div className="hero-latest__info">
-                    <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Latest pick</p>
-                    <p className="text-sm font-semibold text-foreground line-clamp-1">
-                      {latestPick.album || latestPick.title || 'Untitled'}
-                    </p>
-                    <p className="text-xs text-muted-foreground line-clamp-1">
-                      {latestPick.artist || 'Unknown'}
-                    </p>
+              <div className="hidden md:block">
+                <a
+                  href={latestPickLink || '#'}
+                  className={`hero-latest group mx-auto md:mx-0 ${latestPickLink ? '' : 'pointer-events-none opacity-80'}`}
+                  target={latestPickLink ? '_blank' : undefined}
+                  rel={latestPickLink ? 'noopener noreferrer' : undefined}
+                >
+                  <div className="hero-latest__glow" />
+                  <div className="hero-latest__card">
+                    <VinylArtwork
+                      artworkUrl={latestPick.album_artwork_url}
+                      alt={`${latestPick.album} by ${latestPick.artist}`}
+                      seed={`hero-${latestPick.id}`}
+                    />
+                    <div className="hero-latest__info">
+                      <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Latest pick</p>
+                      <p className="text-sm font-semibold text-foreground line-clamp-1">
+                        {latestPick.album || latestPick.title || 'Untitled'}
+                      </p>
+                      <p className="text-xs text-muted-foreground line-clamp-1">
+                        {latestPick.artist || 'Unknown'}
+                      </p>
+                    </div>
+                    <div className="hero-latest__shine" />
                   </div>
-                  <div className="hero-latest__shine" />
-                </div>
+                </a>
               </div>
             )}
           </div>
