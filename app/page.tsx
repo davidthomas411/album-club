@@ -130,6 +130,7 @@ export default function HomePage() {
   const [userFaceImages, setUserFaceImages] = useState<Record<string, Record<string, string>>>({})
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [recentPicks, setRecentPicks] = useState<MusicPick[]>([])
+  const [expandedTheme, setExpandedTheme] = useState<string | null>(null)
   const supabase = createBrowserClient()
 
   useEffect(() => {
@@ -232,6 +233,22 @@ export default function HomePage() {
 
     fetchRecentPicks()
   }, [])
+
+  const recentByTheme = useMemo(() => {
+    const map = new Map<string, MusicPick[]>()
+    recentPicks.forEach((pick) => {
+      const themeName = pick.weekly_theme?.theme_name || 'No Theme'
+      const themeKey = themeName.trim() || 'No Theme'
+      if (!map.has(themeKey)) {
+        map.set(themeKey, [])
+      }
+      map.get(themeKey)?.push(pick)
+    })
+    return Array.from(map.entries()).map(([theme, picks]) => ({
+      theme,
+      picks,
+    }))
+  }, [recentPicks])
 
   useEffect(() => {
     async function fetchCoreMemberFaces() {
@@ -470,88 +487,103 @@ export default function HomePage() {
           <div className="flex items-center justify-between mb-6 md:mb-8">
             <h2 className="text-2xl md:text-3xl font-bold text-foreground">Recent Picks History</h2>
             <span className="text-xs md:text-sm text-muted-foreground">
-              Showing latest {recentPicks.length} entries from Supabase
+              Grouped by theme · {recentByTheme.length} themes · {recentPicks.length} picks
             </span>
           </div>
-          <div className="rounded-xl border border-border bg-surface/80 shadow-sm overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm md:min-w-[720px] table-fixed">
-                <thead className="bg-surface-hover/80 text-[11px] uppercase tracking-[0.25em] text-muted-foreground">
-                  <tr>
-                    <th className="px-4 py-2 text-left font-medium">Track</th>
-                    <th className="px-4 py-2 text-left font-medium">Theme</th>
-                    <th className="px-4 py-2 text-left font-medium">Date</th>
-                    <th className="px-4 py-2 text-left font-medium">Picker</th>
-                    <th className="px-4 py-2 text-right font-medium">Open</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {recentPicks.length === 0 && (
-                    <tr>
-                      <td colSpan={5} className="px-4 py-6 text-center text-muted-foreground">
-                        No picks found.
-                      </td>
-                    </tr>
-                  )}
-                  {recentPicks.map((pick, index) => {
-                    const resolvedUrl = `/link?url=${encodeURIComponent(pick.platform_url)}`
-                    return (
-                      <tr
-                        key={pick.id}
-                        className={`${index % 2 === 0 ? 'bg-transparent' : 'bg-surface-hover/40'} hover:bg-surface-hover/70 transition-colors`}
-                      >
-                        <td className="px-4 py-2">
-                          <div className="flex items-center gap-3 min-w-0">
-                            <div className="w-10 h-10 rounded-sm bg-surface-hover flex items-center justify-center overflow-hidden shadow-inner flex-shrink-0">
-                              {pick.album_artwork_url ? (
-                                <img src={pick.album_artwork_url} alt={pick.album || pick.title || pick.artist} className="w-full h-full object-cover" />
-                              ) : (
-                                <Music className="w-4 h-4 text-muted-foreground" />
-                              )}
-                            </div>
-                            <div className="min-w-0">
-                              <p className="font-semibold text-foreground truncate">
-                                {pick.title || pick.album || 'Untitled'}
-                              </p>
-                              <p className="text-xs text-muted-foreground truncate">{pick.artist || 'Unknown artist'}</p>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-4 py-2">
-                          <span className="text-xs text-muted-foreground italic">
-                            {pick.weekly_theme?.theme_name || 'Not tracked'}
-                          </span>
-                        </td>
-                        <td className="px-4 py-2 text-xs text-foreground whitespace-nowrap">
-                          {pick.created_at
-                            ? new Date(pick.created_at).toLocaleDateString(undefined, {
-                                year: 'numeric',
-                                month: 'short',
-                                day: 'numeric',
-                              })
-                            : 'Unknown'}
-                        </td>
-                        <td className="px-4 py-2 text-xs font-semibold text-primary truncate">
-                          {pick.user?.display_name || 'Unknown'}
-                        </td>
-                        <td className="px-4 py-2 text-right">
-                          <a
-                            href={resolvedUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-2 text-xs text-primary font-semibold"
-                          >
-                            Open
-                            <ExternalLink className="h-3.5 w-3.5" />
-                          </a>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
+
+          {recentPicks.length === 0 ? (
+            <div className="rounded-xl border border-border bg-surface/80 shadow-sm p-8 text-center text-muted-foreground">
+              No picks found.
             </div>
-          </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 md:gap-8">
+              {recentByTheme.map(({ theme, picks }) => {
+                const display = picks.slice(0, 5)
+                const center = (display.length - 1) / 2
+                const isExpanded = expandedTheme === theme
+                return (
+                  <button
+                    key={theme}
+                    type="button"
+                    onClick={() => setExpandedTheme(isExpanded ? null : theme)}
+                    className={`theme-stack-card group relative rounded-xl bg-surface/80 border border-border shadow-md p-5 md:p-6 overflow-hidden text-left transition-all ${
+                      isExpanded ? 'ring-2 ring-primary/60 ring-offset-2 ring-offset-background' : ''
+                    }`}
+                  >
+                    <div className="theme-stack mx-auto">
+                      {display.map((pick, index) => {
+                        const spread = index - center
+                        const cover = pick.album_artwork_url
+                        return (
+                          <div
+                            key={pick.id}
+                            className="stack-item"
+                            style={{
+                              ['--stack-x' as string]: `${spread * 7}px`,
+                              ['--stack-y' as string]: `${(display.length - index - 1) * -4}px`,
+                              ['--stack-rot' as string]: `${spread * 2}deg`,
+                              ['--hover-x' as string]: `${spread * 34}px`,
+                              ['--hover-y' as string]: `${spread * -6}px`,
+                              ['--hover-rot' as string]: `${spread * 10}deg`,
+                              backgroundImage: cover
+                                ? `linear-gradient(135deg, rgba(0,0,0,0.55), rgba(0,0,0,0.25)), url(${cover})`
+                                : 'linear-gradient(135deg, #1f2937, #111827)',
+                            }}
+                            title={pick.album || pick.title || pick.artist || 'Album'}
+                          />
+                        )
+                      })}
+                    </div>
+                    <div className="theme-chip">
+                      <span className="theme-chip__dot" />
+                      <div className="theme-chip__text">
+                        <p className="text-xs uppercase tracking-wide text-muted-foreground">Theme</p>
+                        <p className="text-sm font-semibold text-foreground">{theme}</p>
+                        <p className="text-[11px] text-muted-foreground">{picks.length} picks</p>
+                      </div>
+                    </div>
+                    {isExpanded && (
+                      <div className="theme-detail">
+                        {picks.map((pick) => {
+                          const resolvedUrl = `/link?url=${encodeURIComponent(pick.platform_url)}`
+                          return (
+                            <a
+                              key={pick.id}
+                              href={resolvedUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="theme-detail__item"
+                            >
+                              <div className="theme-detail__thumb">
+                                {pick.album_artwork_url ? (
+                                  <img
+                                    src={pick.album_artwork_url}
+                                    alt={pick.album || pick.title || pick.artist || 'Album'}
+                                  />
+                                ) : (
+                                  <Music className="w-4 h-4 text-muted-foreground" />
+                                )}
+                                <div className="theme-detail__ring" />
+                              </div>
+                              <div className="min-w-0">
+                                <p className="text-sm font-semibold text-foreground truncate">
+                                  {pick.title || pick.album || 'Untitled'}
+                                </p>
+                                <p className="text-xs text-muted-foreground truncate">
+                                  {pick.artist || 'Unknown artist'}
+                                </p>
+                              </div>
+                              <ExternalLink className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                            </a>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+          )}
         </section>
       </main>
     </div>
