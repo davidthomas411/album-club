@@ -273,6 +273,32 @@ body {
     0 18px 40px rgba(0, 0, 0, 0.5);
 }
 
+.hover-spot {
+  position: relative;
+  overflow: hidden;
+}
+
+.hover-spot::before {
+  content: '';
+  position: absolute;
+  inset: -50%;
+  background: radial-gradient(
+    circle at var(--mx, 50%) var(--my, 50%),
+    rgba(255, 255, 255, 0.18),
+    rgba(255, 255, 255, 0.06) 32%,
+    transparent 60%
+  );
+  filter: blur(20px);
+  opacity: 0;
+  transition: opacity 180ms ease;
+  pointer-events: none;
+  mix-blend-mode: screen;
+}
+
+.hover-spot:hover::before {
+  opacity: 1;
+}
+
 /* Hero latest pick */
 .hero-latest {
   position: relative;

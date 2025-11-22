@@ -12,6 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { SiteLogo } from '@/components/site-logo'
 
 interface SidebarProps {
   onClose?: () => void
@@ -76,9 +77,12 @@ export function Sidebar({ onClose }: SidebarProps) {
       )}
 
       {/* Banner */}
-      <div className="mb-6 space-y-1 rounded-xl border border-primary/40 bg-primary/10 p-4 text-primary-foreground shadow-sm">
-        <p className="text-lg font-bold text-primary">Album Club</p>
-        <p className="text-xs text-muted-foreground">Neil made us quit Spotify because morals</p>
+      <div className="mb-6 flex items-center gap-3">
+        <SiteLogo size={64} className="bg-transparent shadow-none" />
+        <div>
+          <p className="text-lg font-bold text-foreground">Album Club</p>
+          <p className="text-xs text-muted-foreground">Neil made us quit Spotify because morals</p>
+        </div>
       </div>
 
       {/* Navigation */}

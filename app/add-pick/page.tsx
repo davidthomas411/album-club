@@ -11,14 +11,24 @@ export default async function AddPickPage() {
     .select('id, display_name')
     .order('display_name', { ascending: true })
 
+  const { data: themesData } = await supabase
+    .from('weekly_themes')
+    .select('id, theme_name, week_start_date, is_active')
+    .order('is_active', { ascending: false })
+    .order('week_start_date', { ascending: false, nullsLast: true })
+    .order('created_at', { ascending: false })
+
+  const themes =
+    themesData?.filter((theme, index, arr) => arr.findIndex(t => t.id === theme.id) === index) || []
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
       <header className="border-b border-border bg-card">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2">
-            <SiteLogo size={40} className="bg-primary/10 p-1" />
-            <h1 className="text-2xl font-bold text-foreground">AlbumClub</h1>
+            <SiteLogo size={48} className="bg-transparent" />
+            <span className="sr-only">AlbumClub</span>
           </Link>
         </div>
       </header>
@@ -33,7 +43,7 @@ export default async function AddPickPage() {
           </p>
         </div>
 
-        <AddPickForm members={members || []} />
+        <AddPickForm members={members || []} themes={themes || []} />
       </div>
     </div>
   )

@@ -6,6 +6,7 @@ import { Music, Play, Menu, ExternalLink } from 'lucide-react'
 import { useEffect, useState, useMemo, CSSProperties } from 'react'
 import { createBrowserClient } from '@/lib/supabase/client'
 import Link from 'next/link'
+import { SiteLogo } from '@/components/site-logo'
 
 interface WeeklyTheme {
   id: string
@@ -190,44 +191,6 @@ export default function HomePage() {
         const latestTheme = data[0]
         console.log('[v0] Selected theme:', latestTheme)
         setCurrentTheme(latestTheme)
-        
-        console.log('[v0] Fetching picks for theme:', data.id)
-        const { data: picksData, error: picksError } = await supabase
-          .from('music_picks')
-          .select(`
-            id,
-            artist,
-            album,
-            platform_url,
-            platform,
-            album_artwork_url,
-            weekly_theme_id,
-            user:user_id (
-              display_name,
-              face_blob_prefix
-            )
-          `)
-          .eq('weekly_theme_id', data.id)
-          .order('created_at', { ascending: false })
-        
-        console.log('[v0] Picks query result:', { picksData, picksError, count: picksData?.length || 0 })
-        
-        const { data: allPicks } = await supabase
-          .from('music_picks')
-          .select('id, album, artist, weekly_theme_id')
-          .order('created_at', { ascending: false })
-        
-        console.log('[v0] ALL picks in database:', allPicks)
-        console.log('[v0] Expected theme ID:', data.id)
-        console.log('[v0] Theme ID mismatch check:', allPicks?.map(p => ({
-          album: p.album,
-          has_theme: !!p.weekly_theme_id,
-          matches: p.weekly_theme_id === data.id
-        })))
-        
-        if (picksData) {
-          setWeeklyPicks(picksData)
-        }
       } else {
         console.log('[v0] No active theme found or error:', error)
       }
@@ -235,6 +198,41 @@ export default function HomePage() {
 
     fetchCurrentTheme()
   }, [])
+
+  useEffect(() => {
+    async function fetchWeeklyPicksForTheme() {
+      if (!currentTheme?.id) {
+        setWeeklyPicks([])
+        return
+      }
+      console.log('[v0] Fetching picks for theme:', currentTheme.id)
+      const { data: picksData, error: picksError } = await supabase
+        .from('music_picks')
+        .select(`
+          id,
+          artist,
+          album,
+          platform_url,
+          platform,
+          album_artwork_url,
+          weekly_theme_id,
+          created_at,
+          user:user_id (
+            display_name,
+            face_blob_prefix
+          )
+        `)
+        .eq('weekly_theme_id', currentTheme.id)
+        .order('created_at', { ascending: false })
+
+      console.log('[v0] Picks query result:', { picksData, picksError, count: picksData?.length || 0 })
+      if (picksData) {
+        setWeeklyPicks(picksData)
+      }
+    }
+
+    fetchWeeklyPicksForTheme()
+  }, [currentTheme?.id, supabase])
 
   useEffect(() => {
     async function fetchRecentPicks() {
@@ -390,10 +388,7 @@ export default function HomePage() {
       
       {/* Main Content - Adjusted margins for mobile */}
       <main className="flex-1 p-4 md:ml-64 md:p-8">
-        <section className="mb-4 md:mb-6 text-center">
-          <h1 className="text-2xl md:text-3xl font-bold text-foreground mb-1">Album Club</h1>
-          <p className="text-xs md:text-sm text-muted-foreground">Neil made us quit Spotify because morals</p>
-        </section>
+        <div className="mb-4 md:mb-6" aria-hidden="true" />
 
         <section className={`mb-8 md:mb-12 bg-gradient-to-r ${currentTheme ? 'from-primary/20 to-primary/5' : 'from-muted/20 to-muted/5'} rounded-lg p-6 md:p-10 relative overflow-hidden`}>
           <div className="relative z-10 flex flex-col gap-8 md:flex-row md:items-center md:gap-10">
@@ -499,7 +494,18 @@ export default function HomePage() {
                     href={`/link?url=${encodeURIComponent(pick.platform_url)}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="group bg-surface hover:bg-surface-hover p-5 md:p-6 rounded-lg transition-all duration-300 cursor-pointer flex flex-col"
+                    className="group hover-spot bg-surface hover:bg-surface-hover p-5 md:p-6 rounded-lg transition-all duration-300 cursor-pointer flex flex-col"
+                    onMouseMove={(e) => {
+                      const rect = e.currentTarget.getBoundingClientRect()
+                      const x = e.clientX - rect.left
+                      const y = e.clientY - rect.top
+                      e.currentTarget.style.setProperty('--mx', `${x}px`)
+                      e.currentTarget.style.setProperty('--my', `${y}px`)
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.setProperty('--mx', `50%`)
+                      e.currentTarget.style.setProperty('--my', `50%`)
+                    }}
                   >
                     {/* Album artwork - no face tracker here */}
                     <div className="relative mb-5 md:mb-6">
