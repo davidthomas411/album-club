@@ -59,6 +59,12 @@ export function AddPickForm({ members, themes = [] }: AddPickFormProps) {
   })
 
   useEffect(() => {
+    if (members.length > 0 && !members.find((m) => m.id === formData.member_id)) {
+      setFormData((prev) => ({ ...prev, member_id: members[0].id }))
+    }
+  }, [members, formData.member_id])
+
+  useEffect(() => {
     if (themes.length > 0) {
       const active = themes.find((t) => t.is_active)
       setCurrentThemeId(active?.id || themes[0].id)

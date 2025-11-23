@@ -17,6 +17,11 @@ export default async function SetThemePage({
     .from('profiles')
     .select('*')
     .order('display_name')
+  const allowedMembers =
+    (members || []).filter((member) => {
+      const name = (member.display_name || '').trim()
+      return /[A-Z]/.test(name) && !name.toLowerCase().startsWith('imported')
+    })
 
   let themeToEdit = null
   if (themeId) {
@@ -54,7 +59,7 @@ export default async function SetThemePage({
 
         <SetThemeForm 
           userId="anonymous" 
-          members={members || []}
+          members={allowedMembers}
           initialTheme={themeToEdit}
         />
       </div>

@@ -10,6 +10,11 @@ export default async function AddPickPage() {
     .from('profiles')
     .select('id, display_name')
     .order('display_name', { ascending: true })
+  const allowedMembers =
+    (members || []).filter((member) => {
+      const name = (member.display_name || '').trim()
+      return /[A-Z]/.test(name) && !name.toLowerCase().startsWith('imported')
+    })
 
   const { data: themesData } = await supabase
     .from('weekly_themes')
@@ -43,7 +48,7 @@ export default async function AddPickPage() {
           </p>
         </div>
 
-        <AddPickForm members={members || []} themes={themes || []} />
+        <AddPickForm members={allowedMembers} themes={themes || []} />
       </div>
     </div>
   )

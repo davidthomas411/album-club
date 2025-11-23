@@ -2,7 +2,7 @@
 
 import { Sidebar } from '@/components/sidebar'
 import { FaceTracker } from '@/components/face-tracker'
-import { Music, Play, Menu, ExternalLink } from 'lucide-react'
+import { Music, Play, Menu, ExternalLink, Beer } from 'lucide-react'
 import { useEffect, useState, useMemo, CSSProperties } from 'react'
 import { createBrowserClient } from '@/lib/supabase/client'
 import Link from 'next/link'
@@ -159,6 +159,10 @@ export default function HomePage() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [recentPicks, setRecentPicks] = useState<MusicPick[]>([])
   const [expandedTheme, setExpandedTheme] = useState<string | null>(null)
+  const [cheersUrl, setCheersUrl] = useState<string | null>(null)
+  const [isCheersOpen, setIsCheersOpen] = useState(false)
+  const [cheersLoading, setCheersLoading] = useState(false)
+  const [cheersError, setCheersError] = useState<string | null>(null)
   const supabase = createBrowserClient()
 
   useEffect(() => {
@@ -198,6 +202,27 @@ export default function HomePage() {
 
     fetchCurrentTheme()
   }, [])
+
+  const showCheers = async () => {
+    setCheersLoading(true)
+    setCheersError(null)
+    try {
+      const response = await fetch('/api/cheers')
+      const payload = await response.json()
+      if (!response.ok || !payload?.url) {
+        throw new Error(payload?.error || 'No cheers image available')
+      }
+      const bustedUrl = `${payload.url}${payload.url.includes('?') ? '&' : '?'}t=${Date.now()}`
+      setCheersUrl(bustedUrl)
+      setIsCheersOpen(true)
+    } catch (error) {
+      console.error('[cheers] Failed to load cheers image', error)
+      setCheersError('No beers right now — try again?')
+      setIsCheersOpen(true)
+    } finally {
+      setCheersLoading(false)
+    }
+  }
 
   useEffect(() => {
     async function fetchWeeklyPicksForTheme() {
@@ -697,6 +722,49 @@ export default function HomePage() {
           )}
         </section>
       </main>
+      <div className="fixed bottom-4 right-4 z-40 flex flex-col items-end gap-3">
+        {isCheersOpen && (
+          <div className="relative bg-surface/95 border border-border shadow-2xl rounded-xl p-4 w-[260px] backdrop-blur flex flex-col gap-3">
+            <button
+              type="button"
+              className="absolute top-2 right-2 text-muted-foreground hover:text-foreground text-xs"
+              onClick={() => setIsCheersOpen(false)}
+            >
+              ✕
+            </button>
+            <div className="flex items-center gap-2">
+              <Beer className="h-5 w-5 text-amber-300" />
+              <p className="text-sm font-semibold text-foreground">Cheers, Dave!</p>
+            </div>
+            {cheersLoading ? (
+              <p className="text-xs text-muted-foreground">Pouring a pint...</p>
+            ) : cheersError ? (
+              <p className="text-xs text-destructive">{cheersError}</p>
+            ) : cheersUrl ? (
+              <div className="overflow-hidden rounded-lg border border-border bg-background">
+                <img
+                  src={cheersUrl}
+                  alt="Cheers!"
+                  className="w-full h-auto object-cover"
+                />
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">Tap below to buy Dave a beer.</p>
+            )}
+          </div>
+        )}
+
+        <button
+          type="button"
+          onClick={showCheers}
+          className="group inline-flex items-center gap-2 rounded-full bg-primary text-black font-semibold px-4 py-2 shadow-lg hover:scale-105 transition-transform border border-black/10"
+        >
+          <div className="flex items-center justify-center w-8 h-8 rounded-full bg-black/10">
+            <SiteLogo size={24} />
+          </div>
+          <span className="text-sm whitespace-nowrap">Buy Dave a beer</span>
+        </button>
+      </div>
     </div>
   )
 }
