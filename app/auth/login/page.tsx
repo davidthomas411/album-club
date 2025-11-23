@@ -24,17 +24,19 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
 
+  const formatLoginEmail = (value: string) => {
+    if (!value) return ''
+    const trimmed = value.trim()
+    return trimmed.includes('@') ? trimmed : `${trimmed}@${DEV_DOMAIN}`
+  }
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     const supabase = createClient()
     setIsLoading(true)
     setError(null)
 
-    const email = (() => {
-      if (!username) return ''
-      const trimmed = username.trim()
-      return trimmed.includes('@') ? trimmed : `${trimmed}@${DEV_DOMAIN}`
-    })()
+    const email = formatLoginEmail(username)
 
     try {
       const { error } = await supabase.auth.signInWithPassword({
@@ -82,7 +84,10 @@ export default function LoginPage() {
                     onChange={(e) => setUsername(e.target.value.toLowerCase())}
                   />
                   <p className="text-xs text-muted-foreground">
-                    We sign in as <code className="font-mono">{username || 'username'}@{DEV_DOMAIN}</code>
+                    We sign in as{" "}
+                    <code className="font-mono">
+                      {formatLoginEmail(username) || `username@${DEV_DOMAIN}`}
+                    </code>
                   </p>
                 </div>
                 <div className="grid gap-2">

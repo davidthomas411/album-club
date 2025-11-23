@@ -270,10 +270,29 @@ export default function HomePage() {
   }, [])
 
   const recentByTheme = useMemo(() => {
+    const getFridayWeekBounds = (date: Date) => {
+      const utc = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()))
+      const day = utc.getUTCDay()
+      const diff = (day - 5 + 7) % 7
+      utc.setUTCDate(utc.getUTCDate() - diff)
+      const weekStart = utc
+      const weekEnd = new Date(weekStart)
+      weekEnd.setUTCDate(weekStart.getUTCDate() + 6)
+      const fmt = (d: Date) => d.toISOString().slice(0, 10)
+      return { weekStartIso: fmt(weekStart), weekEndIso: fmt(weekEnd) }
+    }
+
     const map = new Map<string, MusicPick[]>()
     recentPicks.forEach((pick) => {
-      const themeName = pick.weekly_theme?.theme_name || 'No Theme'
-      const themeKey = themeName.trim() || 'No Theme'
+      const themeName = pick.weekly_theme?.theme_name?.trim()
+      let themeKey: string
+      if (themeName) {
+        themeKey = themeName
+      } else {
+        const createdDate = pick.created_at ? new Date(pick.created_at) : new Date()
+        const { weekStartIso } = getFridayWeekBounds(createdDate)
+        themeKey = `No Theme (${weekStartIso})`
+      }
       if (!map.has(themeKey)) {
         map.set(themeKey, [])
       }

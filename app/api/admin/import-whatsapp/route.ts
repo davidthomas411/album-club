@@ -31,7 +31,9 @@ type Candidate = {
   date: Date
 }
 
-function parseWhatsAppLine(line: string): ParsedLine | null {
+type DateOrder = 'mdy' | 'dmy'
+
+function parseWhatsAppLine(line: string, dateOrder: DateOrder): ParsedLine | null {
   const cleaned = line.replace(/^\uFEFF/, '').trim()
   // Handles both "dd/mm/yy, hh:mm - Sender: msg" and "[dd/mm/yy, hh:mm:ss PM] Sender: msg"
   const regex =
@@ -47,15 +49,28 @@ function parseWhatsAppLine(line: string): ParsedLine | null {
     yearNum = new Date().getFullYear()
   }
 
-  let day = Number(a)
-  let month = Number(b)
-  // Swap if needed (handles mm/dd vs dd/mm)
-  if (month > 12 && day <= 12) {
-    const tmp = day
-    day = month
-    month = tmp
+  const firstPart = Number(a)
+  const secondPart = Number(b)
+  let month: number
+  let day: number
+  // If one side is impossible for a month, trust that side as the day.
+  if (firstPart > 12 && secondPart <= 12) {
+    day = firstPart
+    month = secondPart
+  } else if (secondPart > 12 && firstPart <= 12) {
+    month = firstPart
+    day = secondPart
+  } else {
+    // Ambiguous (both <= 12): use the detected order.
+    if (dateOrder === 'dmy') {
+      day = firstPart
+      month = secondPart
+    } else {
+      month = firstPart
+      day = secondPart
+    }
   }
-  if (month > 12) return null
+  if (month > 12 || day > 31) return null
 
   let hour = Number(hh)
   const minute = Number(mm)
@@ -121,6 +136,24 @@ async function fetchSonglinkMeta(sourceUrl: string): Promise<SonglinkMeta | null
     console.error('[whatsapp-import] songlink meta fetch failed', err)
     return null
   }
+}
+
+function detectDateOrder(lines: string[]): DateOrder {
+  let mdyVotes = 0
+  let dmyVotes = 0
+  const regex =
+    /^(?:\s*\[?)?(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?,?\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*[\u202F\u00A0\s]?(AM|PM)?\]?\s*(?:-|–)?\s*([^:]+):\s+(.*)$/iu
+  for (const raw of lines) {
+    const cleaned = raw.replace(/^\uFEFF/, '').trim()
+    const match = cleaned.match(regex)
+    if (!match) continue
+    const first = Number(match[1])
+    const second = Number(match[2])
+    if (first > 12 && second <= 12) dmyVotes++
+    else if (second > 12 && first <= 12) mdyVotes++
+  }
+  // Default to mdy (WhatsApp exports on this data set) when ambiguous.
+  return mdyVotes >= dmyVotes ? 'mdy' : 'dmy'
 }
 
 export async function POST(req: Request) {
@@ -273,12 +306,15 @@ export async function POST(req: Request) {
       missingAuthUsers: [] as string[],
       profileInsertFailures: [] as string[],
       mappingTraces: [] as string[],
+      dateOrder: 'mdy' as DateOrder,
     }
 
     const candidates: Candidate[] = []
+    const dateOrder = detectDateOrder(lines)
+    debugInfo.dateOrder = dateOrder
     // parse from bottom (most recent) upward
     for (const line of [...lines].reverse()) {
-      const parsed = parseWhatsAppLine(line)
+      const parsed = parseWhatsAppLine(line, dateOrder)
       if (!parsed) continue
       debugInfo.parsedLines++
       if (useCutoff && parsed.date.getTime() < cutoff) continue
@@ -307,7 +343,7 @@ export async function POST(req: Request) {
     let inserted = 0
     const errors: string[] = []
     const missingUser: Set<string> = new Set()
-    let skippedThemeLimit = 0
+    let skippedWeekLimit = 0
     const invalidDefaultUserId = defaultUserId && !isValidUUID(defaultUserId) ? defaultUserId : null
     if (invalidDefaultUserId) {
       errors.push(`IMPORT_DEFAULT_USER_ID is not a valid UUID: "${invalidDefaultUserId}"`)
@@ -326,22 +362,25 @@ export async function POST(req: Request) {
     }
 
     // Cache theme lookups by date key (yyyy-mm-dd)
-    const themeCache = new Map<string, string | null>()
-    const themeCountCache = new Map<string, number>()
+    const themeCache = new Map<string, { id: string | null; weekStartIso: string; weekEndIso: string }>()
+    const themeIdToBounds = new Map<string, { weekStartIso: string; weekEndIso: string } | null>()
+    const weekCountCache = new Map<string, number>()
 
-    const getThemeCount = async (themeId: string): Promise<number> => {
-      if (themeCountCache.has(themeId)) return themeCountCache.get(themeId) as number
+    const getWeekCount = async (weekStartIso: string, weekEndIso: string): Promise<number> => {
+      const key = `${weekStartIso}:${weekEndIso}`
+      if (weekCountCache.has(key)) return weekCountCache.get(key) as number
       const { count, error } = await supabase
         .from('music_picks')
         .select('id', { count: 'exact', head: true })
-        .eq('weekly_theme_id', themeId)
+        .gte('created_at', `${weekStartIso}T00:00:00.000Z`)
+        .lte('created_at', `${weekEndIso}T23:59:59.999Z`)
       if (error) {
-        errors.push(`Count failed for theme ${themeId}: ${error.message}`)
-        themeCountCache.set(themeId, 0)
+        errors.push(`Week count failed for ${weekStartIso}-${weekEndIso}: ${error.message}`)
+        weekCountCache.set(key, 0)
         return 0
       }
       const c = count ?? 0
-      themeCountCache.set(themeId, c)
+      weekCountCache.set(key, c)
       return c
     }
 
@@ -357,9 +396,32 @@ export async function POST(req: Request) {
       return { weekStart, weekEnd, weekStartIso: fmt(weekStart), weekEndIso: fmt(weekEnd) }
     }
 
-    const findThemeIdForDate = async (date: Date): Promise<string | null> => {
+    const getThemeBoundsById = async (id: string): Promise<{ weekStartIso: string; weekEndIso: string } | null> => {
+      if (themeIdToBounds.has(id)) return themeIdToBounds.get(id) ?? null
+      const { data, error } = await supabase
+        .from('weekly_themes')
+        .select('id,week_start_date,week_end_date')
+        .eq('id', id)
+        .limit(1)
+        .maybeSingle()
+      if (error && error.code !== 'PGRST116') {
+        errors.push(`Theme bounds lookup failed for ${id}: ${error.message}`)
+        themeIdToBounds.set(id, null)
+        return null
+      }
+      const bounds =
+        data?.week_start_date && data?.week_end_date
+          ? { weekStartIso: data.week_start_date, weekEndIso: data.week_end_date }
+          : null
+      themeIdToBounds.set(id, bounds)
+      return bounds
+    }
+
+    const findThemeForDate = async (
+      date: Date
+    ): Promise<{ id: string | null; weekStartIso: string; weekEndIso: string }> => {
       const { weekStartIso, weekEndIso } = getFridayWeekBounds(date)
-      if (themeCache.has(weekStartIso)) return themeCache.get(weekStartIso) ?? null
+      if (themeCache.has(weekStartIso)) return themeCache.get(weekStartIso)!
       const { data, error } = await supabase
         .from('weekly_themes')
         .select('id,week_start_date,week_end_date')
@@ -370,15 +432,80 @@ export async function POST(req: Request) {
         .maybeSingle()
       if (error && error.code !== 'PGRST116') {
         errors.push(`Theme lookup failed for ${weekStartIso}: ${error.message}`)
-        themeCache.set(weekStartIso, null)
-        return null
+        const fallback = { id: null, weekStartIso, weekEndIso }
+        themeCache.set(weekStartIso, fallback)
+        return fallback
       }
       const id = data?.id ?? null
-      themeCache.set(weekStartIso, id)
-      return id
+      const bounds =
+        data?.week_start_date && data?.week_end_date
+          ? { weekStartIso: data.week_start_date, weekEndIso: data.week_end_date }
+          : { weekStartIso, weekEndIso }
+      const entry = { id, ...bounds }
+      themeCache.set(weekStartIso, entry)
+      return entry
+    }
+
+    const ensurePlaceholderTheme = async (
+      weekStartIso: string,
+      weekEndIso: string
+    ): Promise<{ id: string | null; weekStartIso: string; weekEndIso: string }> => {
+      const cacheKey = weekStartIso
+      if (themeCache.has(cacheKey)) return themeCache.get(cacheKey)!
+      const name = `Imported (week of ${weekStartIso})`
+      const { data: existing, error: existingErr } = await supabase
+        .from('weekly_themes')
+        .select('id,week_start_date,week_end_date')
+        .eq('week_start_date', weekStartIso)
+        .eq('week_end_date', weekEndIso)
+        .limit(1)
+        .maybeSingle()
+      if (existingErr && existingErr.code !== 'PGRST116') {
+        errors.push(`Placeholder theme lookup failed for ${weekStartIso}: ${existingErr.message}`)
+      }
+      if (existing?.id) {
+        const entry = { id: existing.id, weekStartIso, weekEndIso }
+        themeCache.set(cacheKey, entry)
+        return entry
+      }
+      const { data: inserted, error: insertErr } = await supabase
+        .from('weekly_themes')
+        .insert({
+          theme_name: name,
+          week_start_date: weekStartIso,
+          week_end_date: weekEndIso,
+          is_active: false,
+        })
+        .select('id')
+        .maybeSingle()
+      if (insertErr) {
+        errors.push(`Placeholder theme insert failed for ${weekStartIso}: ${insertErr.message}`)
+        const fallback = { id: null, weekStartIso, weekEndIso }
+        themeCache.set(cacheKey, fallback)
+        return fallback
+      }
+      const id = inserted?.id ?? null
+      const entry = { id, weekStartIso, weekEndIso }
+      themeCache.set(cacheKey, entry)
+      return entry
+    }
+
+    const getWeekWindow = async (
+      date: Date,
+      explicitThemeId: string | null
+    ): Promise<{ themeId: string | null; weekStartIso: string; weekEndIso: string }> => {
+      if (explicitThemeId) {
+        const bounds = await getThemeBoundsById(explicitThemeId)
+        if (bounds) return { themeId: explicitThemeId, ...bounds }
+      }
+      const inferred = await findThemeForDate(date)
+      if (inferred.id) return inferred
+      // Create or reuse a placeholder so even "no theme" weeks get their own bin.
+      return await ensurePlaceholderTheme(inferred.weekStartIso, inferred.weekEndIso)
     }
 
     for (const [url, meta] of unique.entries()) {
+      if (meta.kind !== 'album') continue
       const { data: existing, error: existsError } = await supabase
         .from('music_picks')
         .select('id')
@@ -389,8 +516,12 @@ export async function POST(req: Request) {
         continue
       }
       const dateForRow = meta.date
-      const createdAt =
-        dateForRow && !isNaN(dateForRow.getTime()) ? dateForRow.toISOString() : new Date().toISOString()
+      const effectiveDate = dateForRow && !isNaN(dateForRow.getTime()) ? dateForRow : new Date()
+      const { themeId: resolvedThemeId, weekStartIso, weekEndIso } = await getWeekWindow(
+        effectiveDate,
+        themeId
+      )
+      const createdAt = effectiveDate.toISOString()
 
       const userId = await resolveUserId(meta.sender)
       if (userId) {
@@ -403,8 +534,7 @@ export async function POST(req: Request) {
         continue
       }
 
-      const themeForDate =
-        themeId || (dateForRow instanceof Date && !isNaN(dateForRow.getTime()) ? await findThemeIdForDate(dateForRow) : null)
+      const themeForDate = resolvedThemeId
 
       const songlinkMeta = await fetchSonglinkMeta(url)
 
@@ -429,15 +559,13 @@ export async function POST(req: Request) {
         continue
       }
 
-      if (themeForDate) {
-        const existingCount = await getThemeCount(themeForDate)
-        if (existingCount >= 4) {
-          skippedThemeLimit++
-          continue
-        }
-        // optimistic increment to avoid another fetch within this run
-        themeCountCache.set(themeForDate, existingCount + 1)
+      const existingWeekCount = await getWeekCount(weekStartIso, weekEndIso)
+      if (existingWeekCount >= 4) {
+        skippedWeekLimit++
+        continue
       }
+      // optimistic increment to avoid another fetch within this run
+      weekCountCache.set(`${weekStartIso}:${weekEndIso}`, existingWeekCount + 1)
 
       const { error: insertError } = await supabase.from('music_picks').insert(payload)
       if (insertError) {
@@ -452,7 +580,7 @@ export async function POST(req: Request) {
       inserted,
       debug: debugInfo,
       missingUserMapping: Array.from(missingUser),
-      skippedThemeLimit,
+      skippedWeekLimit,
       errors,
       mappingTraces: debugInfo.mappingTraces,
     })
