@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Hyper-Realistic Plastic C90 Stack V5</title>
+    <link href="https://fonts.googleapis.com/css2?family=Permanent+Marker&family=Archivo+Black&family=Roboto+Mono:wght@500&display=swap" rel="stylesheet">
+    <style>
+        /* --- 1. ENVIRONMENT --- */
+        body {
+            background-color: #1a1a1a;
+            background-image: radial-gradient(#333 1px, transparent 1px);
+            background-size: 20px 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            font-family: sans-serif;
+            overflow: hidden; /* Prevent scrollbars due to perspective */
+        }
+
+        /* The "Shelf" Container */
+        nav {
+            display: flex;
+            flex-direction: column;
+            width: 340px;
+            gap: 2px; /* Tapes stack tight */
+            transform: perspective(1200px) rotateY(-8deg) rotateX(2deg); /* Stronger 3D angle */
+            filter: drop-shadow(15px 15px 30px rgba(0,0,0,0.8)); /* Deeper shadow */
+        }
+
+        /* --- 2. THE CASSETTE OBJECT --- */
+        .tape {
+            position: relative;
+            height: 52px; /* Accurate spine height */
+            width: 100%;
+            text-decoration: none;
+            transition: transform 0.2s ease-out, box-shadow 0.2s ease-out, z-index 0s;
+            transform-origin: left;
+            border-radius: 2px;
+            background: #eee; /* Fallback for .plastic-case */
+        }
+
+        /* Interaction: Slide out with subtle tilt */
+        .tape:hover {
+            transform: translateX(45px) scale(1.02) rotateZ(0.5deg); /* Slightly more aggressive pull out + tilt */
+            z-index: 10; /* Bring to front on hover */
+            box-shadow: -8px 8px 20px rgba(0,0,0,0.6);
+            transition: transform 0.2s ease-out, box-shadow 0.2s ease-out, z-index 0s 0.2s; /* Z-index changes AFTER transform */
+        }
+
+        /* --- 3. THE LAYERS of REALISM --- */
+        
+        /* Layer A: The Paper Insert (J-Card) */
+        .j-card {
+            position: absolute;
+            inset: 3px; /* The paper sits inside the plastic edges */
+            background-color: #f4f4f4; /* Default paper color */
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 15px;
+            overflow: hidden;
+            box-shadow: inset 0 0 2px rgba(0,0,0,0.2); /* Paper depth */
+            border-radius: 1px;
+            
+            /* Subtle paper texture lines */
+            background-image: repeating-linear-gradient(0deg, transparent, transparent 1px, rgba(0,0,0,0.02) 1px, rgba(0,0,0,0.02) 2px);
+            background-size: 100% 4px;
+        }
+
+        /* Layer B: The Plastic Case (ULTRA-REALISTIC GLOSS & IMPERFECTIONS) */
+        .plastic-sheen {
+            position: absolute;
+            inset: 0;
+            border: 1px solid rgba(255,255,255,0.1); /* Slight white edge */
+            border-right: 1px solid rgba(0,0,0,0.4); /* Darker side edge for depth */
+            border-bottom: 1px solid rgba(0,0,0,0.3); /* Darker bottom edge for depth */
+            pointer-events: none;
+            z-index: 5;
+            border-radius: 3px;
+
+            /* MULTIPLE GRADIENTS FOR COMPLEX REFLECTION */
+            background-image: 
+                /* Strong top-left highlight */
+                linear-gradient(135deg, rgba(255,255,255,0.2) 0%, transparent 40%),
+                /* Subtle central glare */
+                linear-gradient(to right, rgba(255,255,255,0.05) 0%, transparent 20%, transparent 80%, rgba(255,255,255,0.05) 100%),
+                /* Stronger bottom-right reflection */
+                linear-gradient(315deg, transparent 60%, rgba(255,255,255,0.2) 100%);
+            
+            /* VERY SUBTLE BOX SHADOW FOR REFRACTION / THICKNESS */
+            box-shadow: 
+                inset 0 0 5px rgba(255,255,255,0.05), /* Inner light refraction */
+                inset 0 0 8px rgba(0,0,0,0.05);       /* Inner dark refraction */
+
+            /* Tiny bit of surface dust/scratches */
+            background-blend-mode: overlay;
+            background-color: rgba(0,0,0,0.02); /* Very slight dark tint */
+            background-image: url('https://www.transparenttextures.com/patterns/dust.png'),
+                              linear-gradient(
+                                  to bottom, 
+                                  rgba(255,255,255,0.3) 0%, 
+                                  rgba(255,255,255,0.05) 20%, 
+                                  rgba(255,255,255,0) 50%, 
+                                  rgba(255,255,255,0.05) 85%, 
+                                  rgba(255,255,255,0.2) 100%
+                              );
+            background-size: 200px 200px, cover; /* Dust pattern, then glare */
+            opacity: 0.98; /* Almost fully opaque, but allows slight blend */
+        }
+
+        /* --- 4. TYPOGRAPHY & GRAPHICS --- */
+        
+        .title {
+            font-family: 'Permanent Marker', cursive;
+            font-size: 1.4rem;
+            color: #111;
+            position: relative;
+            z-index: 2;
+            transform: rotate(-0.5deg); /* Imperfect handwriting */
+            opacity: 0.9;
+        }
+
+        .brand-mark {
+            font-family: 'Archivo Black', sans-serif;
+            font-size: 1.2rem;
+            text-transform: uppercase;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            line-height: 0.8;
+            opacity: 0.8;
+            color: #333; /* Default brand mark color */
+        }
+        .brand-mark span { font-size: 0.6rem; font-family: 'Roboto Mono', monospace; font-weight: normal; }
+
+        /* --- 5. TAPE STYLES (The "TDK", "Maxell", "Sony" looks) --- */
+
+        /* STYLE 1: The "D90" (Classic Grey/Blue) */
+        .tdk-style .j-card {
+            background-color: #dcdde1;
+            background-image: radial-gradient(#bdc3c7 1px, transparent 1px);
+            background-size: 4px 4px;
+        }
+        .tdk-style .brand-mark { color: #2980b9; } /* Blue text */
+        .tdk-style .j-card::before { /* The blue stripe */
+            content: ''; position: absolute; left: 10px; top: 0; bottom: 0; width: 15px;
+            background: #2980b9; z-index: 1; opacity: 0.9;
+            box-shadow: inset 0 0 5px rgba(0,0,0,0.3);
+        }
+
+        /* STYLE 2: The "HF" (Clear/Orange) */
+        .sony-style .j-card {
+            background-color: #fff;
+            border-left: 10px solid #e67e22;
+            border-right: 10px solid #e67e22;
+        }
+        .sony-style .title { color: #d35400; }
+        .sony-style .brand-mark { color: #e67e22; }
+
+        /* STYLE 3: The "XLII" (High Bias Black/Gold) */
+        .maxell-style .j-card {
+            background-color: #111;
+            box-shadow: inset 0 0 0 2px #cfa536; /* Gold Border */
+        }
+        .maxell-style .title { 
+            color: #eee; /* White pen on black tape */
+            text-shadow: 0 0 2px rgba(255,255,255,0.5);
+        }
+        .maxell-style .brand-mark { color: #cfa536; }
+        
+        /* STYLE 4: The "UR" (Red/Blue geometric) */
+        .ur-style .j-card {
+            background: linear-gradient(90deg, #e74c3c 0%, #e74c3c 20%, #ecf0f1 20%, #ecf0f1 100%);
+        }
+        .ur-style .title { margin-left: 10px; }
+        .ur-style .brand-mark { color: #c0392b; margin-right: 5px; }
+
+        /* STYLE 5: The "Chrome" (Silver) */
+        .chrome-style .j-card {
+            background: linear-gradient(180deg, #bdc3c7 0%, #fff 50%, #bdc3c7 100%);
+        }
+        .chrome-style .brand-mark { color: #000; }
+
+        /* STYLE 6: Generic (Green/Handwritten) */
+        .generic-style .j-card {
+            background-color: #a4b0be;
+            border-bottom: 3px solid #747d8c;
+            transform: rotate(-0.8deg);
+        }
+        .generic-style .title {
+            color: #333;
+            font-size: 1.3rem;
+            transform: rotate(1deg);
+        }
+        .generic-style .brand-mark {
+            color: #535c68;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+
+    <nav>
+        
+        <a href="#home" class="tape tdk-style">
+            <div class="j-card">
+                <div class="title">HOME BASE</div>
+                <div class="brand-mark">90<span>min</span></div>
+            </div>
+            <div class="plastic-sheen"></div>
+        </a>
+
+        <a href="#about" class="tape sony-style">
+            <div class="j-card">
+                <div class="brand-mark" style="transform: scale(0.7);">A</div>
+                <div class="title">About Us</div>
+                <div class="brand-mark">HF<span>90</span></div>
+            </div>
+            <div class="plastic-sheen"></div>
+        </a>
+
+        <a href="#work" class="tape maxell-style">
+            <div class="j-card">
+                <div class="title">Portfolio</div>
+                <div class="brand-mark">XL<span>II</span></div>
+            </div>
+            <div class="plastic-sheen"></div>
+        </a>
+
+        <a href="#services" class="tape ur-style">
+            <div class="j-card">
+                <div class="title">Services</div>
+                <div class="brand-mark">UR<span>90</span></div>
+            </div>
+            <div class="plastic-sheen"></div>
+        </a>
+
+        <a href="#contact" class="tape chrome-style">
+            <div class="j-card">
+                <div class="title">Contact</div>
+                <div class="brand-mark">Cr<span>O2</span></div>
+            </div>
+            <div class="plastic-sheen"></div>
+        </a>
+
+         <a href="#blog" class="tape generic-style">
+            <div class="j-card">
+                <div class="title">My Blog</div>
+                <div class="brand-mark">C<span>60</span></div>
+            </div>
+            <div class="plastic-sheen"></div>
+        </a>
+
+    </nav>
+
+</body>
+</html>

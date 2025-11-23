@@ -78,6 +78,10 @@
 | 2/5/24, 9:17:42 PM | David Thomas | track | https://open.spotify.com/track/6twjuBZfRJIZnoHrghzWLk?si=r8JtxD4JSqeqRzpAVwDLhA&context=spotify%3Aartist%3A6ws5XBA70XgeBpnLZhQBoy |
 | 2/8/24, 11:16:03 AM | Rory Edwards | album | https://open.spotify.com/album/6DEjYFkNZh67HP7R9PSZvv?si=XqnSp6u9RtWxy9NEh0T1Zw |
 | 2/9/24, 2:02:44 AM | Neil Tilston | track | https://open.spotify.com/track/0pu7BkgCzz3itcG2BbLnIO?si=15poFWmDRgOrkB0Zz_xyzA |
+| 2025-11-21, 21:45:01 | Rory Edwards | album | https://open.spotify.com/album/3SUEJULSGgBDG1j4GQhfYY?si=7ALfltdWT_CUMEvdk5eW-A |
+| 2025-11-21, 21:45:01 | Neil Tilston | album | https://open.spotify.com/album/0G19nfof63Mn9Se0ermJvi?si=mQiDQt9ERE6nHYFrH8A8Ww |
+| 2025-11-21, 21:45:01 | David Thomas | album | https://open.spotify.com/album/52yD51X7yDinwlg6tbCtpP?si=CyOT-6dFR-qYttC5eBZD4w |
+| 2025-11-21, 21:45:01 | Fergus Neville | album | https://open.spotify.com/album/45YPdI0NwrZvqVWKi6Gb6D?si=DuSzQwddSnqjVDZYX-d3NQ |
 | 2/9/24, 2:47:27 AM | Rory Edwards | track | https://open.spotify.com/track/7aNwURnV4t19bPQM4mvpLY?si=vUTUv5HPR5qdPVYgSAtDNw |
 | 2/9/24, 6:12:13 AM | Fergus Neville | track | https://open.spotify.com/track/2ZokfzmK1ag7AgUIiY34ci?si=05cb2d68aae048e8 |
 | 2/9/24, 8:45:53 AM | David Thomas | track | https://open.spotify.com/track/6o2g1BJvtYQssH84kBYs7y?si=1TTFhfaMRHyykZXxZdXrJQ&context=spotify%3Aplaylist%3A5EqQ4SJ3lMliDCT2NUHRTq |

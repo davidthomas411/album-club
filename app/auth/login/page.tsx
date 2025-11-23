@@ -17,7 +17,8 @@ import { useState } from "react"
 import { SiteLogo } from '@/components/site-logo'
 
 export default function LoginPage() {
-  const [email, setEmail] = useState("")
+  const DEV_DOMAIN = process.env.NEXT_PUBLIC_DEV_LOGIN_DOMAIN || 'albumclub.dev'
+  const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
@@ -28,6 +29,12 @@ export default function LoginPage() {
     const supabase = createClient()
     setIsLoading(true)
     setError(null)
+
+    const email = (() => {
+      if (!username) return ''
+      const trimmed = username.trim()
+      return trimmed.includes('@') ? trimmed : `${trimmed}@${DEV_DOMAIN}`
+    })()
 
     try {
       const { error } = await supabase.auth.signInWithPassword({
@@ -65,15 +72,18 @@ export default function LoginPage() {
             <form onSubmit={handleLogin}>
               <div className="flex flex-col gap-6">
                 <div className="grid gap-2">
-                  <Label htmlFor="email">Email</Label>
+                  <Label htmlFor="username">Username</Label>
                   <Input
-                    id="email"
-                    type="email"
-                    placeholder="m@example.com"
+                    id="username"
+                    type="text"
+                    placeholder="dave"
                     required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value.toLowerCase())}
                   />
+                  <p className="text-xs text-muted-foreground">
+                    We sign in as <code className="font-mono">{username || 'username'}@{DEV_DOMAIN}</code>
+                  </p>
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="password">Password</Label>

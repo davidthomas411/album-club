@@ -48,6 +48,11 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true)
   const [editingPickId, setEditingPickId] = useState<string | null>(null)
   const [editData, setEditData] = useState<Partial<MusicPick>>({})
+  const [importFile, setImportFile] = useState<File | null>(null)
+  const [importThemeId, setImportThemeId] = useState<string | null>(null)
+  const [importDaysBack, setImportDaysBack] = useState('30')
+  const [importResult, setImportResult] = useState<string | null>(null)
+  const [isImporting, setIsImporting] = useState(false)
   const supabase = createBrowserClient()
 
   async function fetchData() {
@@ -133,6 +138,43 @@ export default function AdminPage() {
     setEditingPickId(null)
     setEditData({})
     fetchData()
+  }
+
+  async function handleImport() {
+    if (!importFile) {
+      alert('Please choose a chat .txt file')
+      return
+    }
+    setIsImporting(true)
+    setImportResult(null)
+    try {
+      const formData = new FormData()
+      formData.append('file', importFile)
+      if (importThemeId) formData.append('themeId', importThemeId)
+      formData.append('daysBack', importDaysBack || '10')
+
+      const res = await fetch('/api/admin/import-whatsapp', {
+        method: 'POST',
+        body: formData,
+      })
+      const payload = await res.json()
+      if (!res.ok) {
+        setImportResult(payload?.error || 'Import failed')
+      } else {
+        const debug =
+          payload?.debug &&
+          ` Debug -> lines:${payload.debug.totalLines}, parsed:${payload.debug.parsedLines}, withinCutoff:${payload.debug.withinCutoffLines}, links:${payload.debug.linksFound}, unique:${payload.debug.uniqueCountBeforeInsert}, sample:${(payload.debug.sampleLinks || []).join(', ')}, users:${(payload.debug.resolvedUsers || []).join(' | ')}, missingEmails:${(payload.debug.missingEmails || []).join(' | ')}, missingAuth:${(payload.debug.missingAuthUsers || []).join(' | ')}, unmatched:${(payload.debug.unmatchedSenders || []).join(' | ')}, profileFail:${(payload.debug.profileInsertFailures || []).join(' | ')}, traces:${(payload.debug.mappingTraces || payload.mappingTraces || []).join(' || ')}`.trim()
+        const summary = `Found ${payload.found}, inserted ${payload.inserted}${
+          payload.errors?.length ? `. Errors: ${payload.errors.join('; ')}` : ''
+        }${debug ? `.${debug}` : ''}`
+        setImportResult(summary)
+        fetchData()
+      }
+    } catch (error: any) {
+      setImportResult(error?.message || 'Unexpected error')
+    } finally {
+      setIsImporting(false)
+    }
   }
 
   async function deleteTheme(id: string) {
@@ -240,63 +282,63 @@ export default function AdminPage() {
           <CardHeader>
             <CardTitle>Music Picks ({picks.length})</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="overflow-x-auto">
             {picks.length === 0 ? (
               <p className="text-muted-foreground">No picks in database</p>
             ) : (
-              <div className="space-y-4">
-                {picks.map((pick) => (
-                  <div key={pick.id} className="border border-border rounded-lg p-4">
-                    {editingPickId === pick.id ? (
-                      <div className="space-y-3">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                          <div className="space-y-1">
-                            <Label>Artist</Label>
-                            <Input
-                              value={editData.artist || ''}
-                              onChange={(e) => setEditData((prev) => ({ ...prev, artist: e.target.value }))}
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <Label>Album/Title</Label>
-                            <Input
-                              value={editData.album || ''}
-                              onChange={(e) =>
-                                setEditData((prev) => ({ ...prev, album: e.target.value, title: e.target.value }))
-                              }
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <Label>Platform URL</Label>
-                            <Input
-                              value={editData.platform_url || ''}
-                              onChange={(e) => setEditData((prev) => ({ ...prev, platform_url: e.target.value }))}
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <Label>Platform</Label>
-                            <Select
-                              value={editData.platform || undefined}
-                              onValueChange={(value) => setEditData((prev) => ({ ...prev, platform: value }))}
-                            >
-                              <SelectTrigger>
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {['spotify','tidal','apple_music','youtube_music','soundcloud','deezer','bandcamp','other'].map((p) => (
-                                  <SelectItem key={p} value={p}>{p}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div className="space-y-1">
-                            <Label>Theme</Label>
+              <table className="w-full text-sm">
+                <thead className="text-muted-foreground">
+                  <tr className="border-b border-border">
+                    <th className="text-left py-2 pr-3">Artist / Album</th>
+                    <th className="text-left py-2 pr-3">User</th>
+                    <th className="text-left py-2 pr-3">Theme</th>
+                    <th className="text-left py-2 pr-3">Platform</th>
+                    <th className="text-left py-2 pr-3">Link</th>
+                    <th className="text-left py-2 pr-3">Created</th>
+                    <th className="text-right py-2">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {picks.map((pick) => {
+                    const isEditing = editingPickId === pick.id
+                    return (
+                      <tr key={pick.id} className="border-b border-border/60">
+                        <td className="py-2 pr-3 align-top">
+                          {isEditing ? (
+                            <div className="space-y-2">
+                              <Input
+                                value={editData.artist || ''}
+                                onChange={(e) => setEditData((prev) => ({ ...prev, artist: e.target.value }))}
+                                placeholder="Artist"
+                                className="h-9"
+                              />
+                              <Input
+                                value={editData.album || ''}
+                                onChange={(e) =>
+                                  setEditData((prev) => ({ ...prev, album: e.target.value, title: e.target.value }))
+                                }
+                                placeholder="Album"
+                                className="h-9"
+                              />
+                            </div>
+                          ) : (
+                            <div className="space-y-1">
+                              <div className="font-semibold text-foreground">{pick.artist}</div>
+                              <div className="text-muted-foreground">{pick.album}</div>
+                            </div>
+                          )}
+                        </td>
+                        <td className="py-2 pr-3 align-top">
+                          {pick.user?.display_name || 'Unknown'}
+                        </td>
+                        <td className="py-2 pr-3 align-top min-w-[160px]">
+                          {isEditing ? (
                             <Select
                               value={editData.weekly_theme_id as string | undefined}
                               onValueChange={(value) => setEditData((prev) => ({ ...prev, weekly_theme_id: value }))}
                             >
-                              <SelectTrigger>
-                                <SelectValue />
+                              <SelectTrigger className="h-9">
+                                <SelectValue placeholder="Theme" />
                               </SelectTrigger>
                               <SelectContent>
                                 {themes.map((theme) => (
@@ -306,65 +348,137 @@ export default function AdminPage() {
                                 ))}
                               </SelectContent>
                             </Select>
-                          </div>
-                        </div>
-                        <div className="flex gap-2 justify-end">
-                          <Button variant="outline" size="sm" onClick={cancelEdit}>
-                            Cancel
-                          </Button>
-                          <Button size="sm" onClick={savePick}>
-                            Save
-                          </Button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex items-start justify-between gap-4">
-                        {pick.album_artwork_url && (
-                          <img 
-                            src={pick.album_artwork_url || "/placeholder.svg"} 
-                            alt={`${pick.album} by ${pick.artist}`}
-                            className="w-16 h-16 rounded object-cover flex-shrink-0"
-                          />
-                        )}
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-2">
-                            <h3 className="font-bold text-foreground">{pick.artist} - {pick.album}</h3>
-                            {pick.platform && (
-                              <Badge variant="outline">{pick.platform}</Badge>
-                            )}
-                          </div>
-                          <div className="text-sm text-muted-foreground space-y-1">
-                            <p><strong>User:</strong> {pick.user?.display_name || 'Unknown'}</p>
-                            <p><strong>Theme:</strong> {pick.weekly_theme?.theme_name || 'No theme'}</p>
-                            <p><strong>Link:</strong> <a href={pick.platform_url} target="_blank" className="text-primary hover:underline">{pick.platform_url}</a></p>
-                            {pick.notes && <p><strong>Notes:</strong> {pick.notes}</p>}
-                            <p><strong>Created:</strong> {new Date(pick.created_at).toLocaleString()}</p>
-                            <p className="text-xs opacity-70"><strong>ID:</strong> {pick.id}</p>
-                          </div>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => startEditPick(pick)}
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => deletePick(pick.id)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
+                          ) : (
+                            pick.weekly_theme?.theme_name || 'No theme'
+                          )}
+                        </td>
+                        <td className="py-2 pr-3 align-top min-w-[120px]">
+                          {isEditing ? (
+                            <Select
+                              value={editData.platform || undefined}
+                              onValueChange={(value) => setEditData((prev) => ({ ...prev, platform: value }))}
+                            >
+                              <SelectTrigger className="h-9">
+                                <SelectValue placeholder="Platform" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {['spotify','tidal','apple_music','youtube_music','soundcloud','deezer','bandcamp','other'].map((p) => (
+                                  <SelectItem key={p} value={p}>{p}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            <Badge variant="outline">{pick.platform || 'n/a'}</Badge>
+                          )}
+                        </td>
+                        <td className="py-2 pr-3 align-top max-w-[220px]">
+                          {isEditing ? (
+                            <Input
+                              value={editData.platform_url || ''}
+                              onChange={(e) => setEditData((prev) => ({ ...prev, platform_url: e.target.value }))}
+                              placeholder="https://"
+                              className="h-9"
+                            />
+                          ) : (
+                            <a href={pick.platform_url} target="_blank" className="text-primary hover:underline break-all">
+                              {pick.platform_url}
+                            </a>
+                          )}
+                        </td>
+                        <td className="py-2 pr-3 align-top whitespace-nowrap">
+                          {new Date(pick.created_at).toLocaleString()}
+                        </td>
+                        <td className="py-2 align-top text-right space-x-2">
+                          {isEditing ? (
+                            <>
+                              <Button variant="outline" size="sm" onClick={cancelEdit}>
+                                Cancel
+                              </Button>
+                              <Button size="sm" onClick={savePick}>
+                                Save
+                              </Button>
+                            </>
+                          ) : (
+                            <>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => startEditPick(pick)}
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => deletePick(pick.id)}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
             )}
-         </CardContent>
+          </CardContent>
+        </Card>
+
+        {/* WhatsApp Import */}
+        <Card className="mb-8">
+          <CardHeader>
+            <CardTitle>Import from WhatsApp</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Chat export (.txt)</Label>
+                <Input
+                  type="file"
+                  accept=".txt,text/plain"
+                  onChange={(e) => setImportFile(e.target.files?.[0] || null)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Theme (optional)</Label>
+                <Select
+                  value={importThemeId || undefined}
+                  onValueChange={(value) => setImportThemeId(value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select theme" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {themes.map((theme) => (
+                      <SelectItem key={theme.id} value={theme.id}>
+                        {theme.theme_name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Days back</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  value={importDaysBack}
+                  onChange={(e) => setImportDaysBack(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">Default 30 days. Set 0 to scan all.</p>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Button onClick={handleImport} disabled={isImporting || !importFile}>
+                {isImporting ? 'Importing...' : 'Import Chat'}
+              </Button>
+              {importResult && (
+                <p className="text-sm text-muted-foreground">{importResult}</p>
+              )}
+            </div>
+          </CardContent>
         </Card>
 
         {/* Weekly Themes Section */}

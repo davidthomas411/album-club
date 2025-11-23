@@ -12,7 +12,7 @@ type CsvPick = {
 const NAME_MAP: Record<string, string> = {
   'Rory Edwards': 'Rory',
   'Neil Tilston': 'Neil',
-  'David Thomas': 'David',
+  'David Thomas': 'Dave',
   'Fergus Neville': 'Ferg',
 }
 
