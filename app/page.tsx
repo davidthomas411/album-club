@@ -282,25 +282,22 @@ export default function HomePage() {
       return { weekStartIso: fmt(weekStart), weekEndIso: fmt(weekEnd) }
     }
 
-    const map = new Map<string, MusicPick[]>()
+    const map = new Map<string, { label: string; picks: MusicPick[] }>()
     recentPicks.forEach((pick) => {
-      const themeName = pick.weekly_theme?.theme_name?.trim()
-      let themeKey: string
-      if (themeName) {
-        themeKey = themeName
-      } else {
-        const createdDate = pick.created_at ? new Date(pick.created_at) : new Date()
-        const { weekStartIso } = getFridayWeekBounds(createdDate)
-        themeKey = `No Theme (${weekStartIso})`
+      const themeName = pick.weekly_theme?.theme_name?.trim() || 'No Theme'
+      const weekStart =
+        pick.weekly_theme?.week_start_date ||
+        getFridayWeekBounds(pick.created_at ? new Date(pick.created_at) : new Date()).weekStartIso
+      const key = `${weekStart}::${themeName}`
+      if (!map.has(key)) {
+        map.set(key, { label: themeName, picks: [] })
       }
-      if (!map.has(themeKey)) {
-        map.set(themeKey, [])
-      }
-      map.get(themeKey)?.push(pick)
+      map.get(key)?.picks.push(pick)
     })
-    return Array.from(map.entries()).map(([theme, picks]) => ({
-      theme,
-      picks,
+    return Array.from(map.entries()).map(([key, value]) => ({
+      themeKey: key,
+      themeLabel: value.label,
+      picks: value.picks,
     }))
   }, [recentPicks])
 
@@ -334,21 +331,23 @@ export default function HomePage() {
   }, [])
 
   useEffect(() => {
-    async function fetchAllUserFaceImages() {
+    async function fetchWeeklyUserFaces() {
       const uniqueUsers = new Set(
         weeklyPicks
-          .map(pick => pick.user?.face_blob_prefix)
+          .map((pick) => pick.user?.face_blob_prefix)
           .filter(Boolean) as string[]
       )
-      
+
+      if (uniqueUsers.size === 0) return
+
       const faceImagesMap: Record<string, Record<string, string>> = {}
       const cacheBust = Date.now()
-      
+
       for (const userPrefix of uniqueUsers) {
         try {
           const response = await fetch(
             `/api/get-face-images?member=${userPrefix}&_=${cacheBust}`,
-            { cache: 'no-store' },
+            { cache: 'no-store' }
           )
           const data = await response.json()
           if (data.images) {
@@ -358,14 +357,14 @@ export default function HomePage() {
           console.error(`[v0] Error fetching face images for ${userPrefix}:`, error)
         }
       }
-      
+
       if (Object.keys(faceImagesMap).length > 0) {
-        setUserFaceImages(prev => ({ ...prev, ...faceImagesMap }))
+        setUserFaceImages((prev) => ({ ...prev, ...faceImagesMap }))
       }
     }
 
     if (weeklyPicks.length > 0) {
-      fetchAllUserFaceImages()
+      fetchWeeklyUserFaces()
     }
   }, [weeklyPicks])
 
@@ -506,7 +505,6 @@ export default function HomePage() {
               {weeklyPicks.map((pick) => {
                 const userPrefix = pick.user?.face_blob_prefix
                 const userFaces = userPrefix ? userFaceImages[userPrefix] : undefined
-                
                 return (
                   <a 
                     key={pick.id}
@@ -558,7 +556,7 @@ export default function HomePage() {
                       <p className="text-base md:text-lg text-muted-foreground line-clamp-1">
                         {pick.artist}
                       </p>
-                      
+
                       {/* Face tracker in bottom right of info section */}
                       {userFaces && userPrefix ? (
                         <div className="absolute bottom-0 right-0 w-20 h-20 md:w-24 md:h-24 rounded-full border-3 border-background shadow-xl overflow-hidden">
@@ -610,15 +608,15 @@ export default function HomePage() {
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 md:gap-8">
-              {recentByTheme.map(({ theme, picks }) => {
-                const display = picks.slice(0, 5)
-                const center = (display.length - 1) / 2
-                const isExpanded = expandedTheme === theme
-                return (
-                  <button
-                    key={theme}
+              {recentByTheme.map(({ themeKey, themeLabel, picks }) => {
+                        const display = picks.slice(0, 5)
+                        const center = (display.length - 1) / 2
+                        const isExpanded = expandedTheme === themeKey
+                        return (
+                          <button
+                    key={themeKey}
                     type="button"
-                    onClick={() => setExpandedTheme(isExpanded ? null : theme)}
+                    onClick={() => setExpandedTheme(isExpanded ? null : themeKey)}
                     className={`theme-stack-card group relative rounded-xl bg-surface/80 border border-border shadow-md p-5 md:p-6 overflow-hidden text-left transition-all ${
                       isExpanded ? 'ring-2 ring-primary/60 ring-offset-2 ring-offset-background' : ''
                     }`}
@@ -651,7 +649,7 @@ export default function HomePage() {
                       <span className="theme-chip__dot" />
                       <div className="theme-chip__text">
                         <p className="text-xs uppercase tracking-wide text-muted-foreground">Theme</p>
-                        <p className="text-sm font-semibold text-foreground">{theme}</p>
+                        <p className="text-sm font-semibold text-foreground">{themeLabel}</p>
                         <p className="text-[11px] text-muted-foreground">{picks.length} picks</p>
                       </div>
                     </div>
@@ -666,31 +664,31 @@ export default function HomePage() {
                               target="_blank"
                               rel="noopener noreferrer"
                               className="theme-detail__item"
-                            >
-                              <div className="theme-detail__thumb">
-                                {pick.album_artwork_url ? (
-                                  <img
-                                    src={pick.album_artwork_url}
-                                    alt={pick.album || pick.title || pick.artist || 'Album'}
-                                  />
-                                ) : (
-                                  <Music className="w-4 h-4 text-muted-foreground" />
-                                )}
-                                <div className="theme-detail__ring" />
-                              </div>
-                              <div className="min-w-0">
-                                <p className="text-sm font-semibold text-foreground truncate">
-                                  {pick.title || pick.album || 'Untitled'}
-                                </p>
-                                <p className="text-xs text-muted-foreground truncate">
-                                  {pick.artist || 'Unknown artist'}
-                                </p>
-                              </div>
-                              <ExternalLink className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                            </a>
-                          )
-                        })}
-                      </div>
+                          >
+                            <div className="theme-detail__thumb">
+                              {pick.album_artwork_url ? (
+                                <img
+                                  src={pick.album_artwork_url}
+                                  alt={pick.album || pick.title || pick.artist || 'Album'}
+                                />
+                              ) : (
+                                <Music className="w-4 h-4 text-muted-foreground" />
+                              )}
+                              <div className="theme-detail__ring" />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-sm font-semibold text-foreground truncate">
+                                {pick.title || pick.album || 'Untitled'}
+                              </p>
+                              <p className="text-xs text-muted-foreground truncate">
+                                {pick.artist || 'Unknown artist'}
+                              </p>
+                            </div>
+                            <ExternalLink className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                          </a>
+                        )
+                      })}
+                    </div>
                     )}
                   </button>
                 )

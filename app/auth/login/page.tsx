@@ -17,7 +17,7 @@ import { useState } from "react"
 import { SiteLogo } from '@/components/site-logo'
 
 export default function LoginPage() {
-  const DEV_DOMAIN = process.env.NEXT_PUBLIC_DEV_LOGIN_DOMAIN || 'albumclub.dev'
+  const DEV_DOMAIN = process.env.NEXT_PUBLIC_DEV_LOGIN_DOMAIN || 'album-club.com'
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState<string | null>(null)
@@ -39,12 +39,16 @@ export default function LoginPage() {
     const email = formatLoginEmail(username)
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       })
       if (error) throw error
-      router.push("/")
+      const preferredPlatform =
+        (data?.user?.user_metadata as Record<string, string | undefined> | null)?.preferred_platform ||
+        null
+      const destination = preferredPlatform ? "/" : "/settings?prefPrompt=1"
+      router.push(destination)
       router.refresh()
     } catch (error: unknown) {
       setError(error instanceof Error ? error.message : "An error occurred")

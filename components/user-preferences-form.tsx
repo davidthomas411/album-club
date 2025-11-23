@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -32,6 +33,7 @@ export function UserPreferencesForm({ initialPreference }: UserPreferencesFormPr
   const [preference, setPreference] = useState(initialPreference || 'spotify')
   const [isSaving, setIsSaving] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
+  const router = useRouter()
 
   const handleSave = async () => {
     setIsSaving(true)
@@ -49,6 +51,8 @@ export function UserPreferencesForm({ initialPreference }: UserPreferencesFormPr
       })
       if (error) throw error
       setMessage('Preference updated!')
+      router.push('/')
+      router.refresh()
     } catch (error) {
       console.error('[preferences] Failed to save preference:', error)
       setMessage('Failed to save preference. Please try again.')

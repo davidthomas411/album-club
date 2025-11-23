@@ -75,6 +75,7 @@ export default function AdminPage() {
         *,
         curator:curator_id(display_name)
       `)
+      .order('week_start_date', { ascending: false, nullsLast: true })
       .order('created_at', { ascending: false })
 
     setPicks(picksData || [])

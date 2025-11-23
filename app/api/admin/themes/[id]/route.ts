@@ -7,8 +7,9 @@ export const dynamic = 'force-dynamic'
 
 export async function DELETE(
   _req: Request,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
+  const { id } = await params
   const supabase = await createClient()
   const {
     data: { user },
@@ -41,12 +42,12 @@ export async function DELETE(
     await adminClient
       .from('music_picks')
       .update({ weekly_theme_id: null })
-      .eq('weekly_theme_id', params.id)
+      .eq('weekly_theme_id', id)
 
     const { error } = await adminClient
       .from('weekly_themes')
       .delete()
-      .eq('id', params.id)
+      .eq('id', id)
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 400 })

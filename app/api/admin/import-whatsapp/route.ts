@@ -538,9 +538,10 @@ export async function POST(req: Request) {
 
       const songlinkMeta = await fetchSonglinkMeta(url)
 
+      const resolvedTitle = songlinkMeta?.title || 'Imported album'
       const payload = {
-        album: 'Imported via WhatsApp',
-        title: songlinkMeta?.title || 'Imported album',
+        album: resolvedTitle,
+        title: resolvedTitle,
         artist: songlinkMeta?.artistName || meta.sender || 'Unknown',
         platform_url: url,
         platform: meta.platform,
