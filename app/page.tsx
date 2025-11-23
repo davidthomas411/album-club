@@ -163,6 +163,8 @@ export default function HomePage() {
   const [isCheersOpen, setIsCheersOpen] = useState(false)
   const [cheersLoading, setCheersLoading] = useState(false)
   const [cheersError, setCheersError] = useState<string | null>(null)
+  const [cheersHideTimer, setCheersHideTimer] = useState<NodeJS.Timeout | null>(null)
+  const [showCheersButton, setShowCheersButton] = useState(false)
   const supabase = createBrowserClient()
 
   useEffect(() => {
@@ -203,6 +205,31 @@ export default function HomePage() {
     fetchCurrentTheme()
   }, [])
 
+  useEffect(() => {
+    const handleScroll = () => {
+      const nearBottom =
+        window.innerHeight + window.scrollY >= document.body.offsetHeight - 160
+      setShowCheersButton(nearBottom)
+    }
+    handleScroll()
+    window.addEventListener('scroll', handleScroll, { passive: true })
+    return () => {
+      window.removeEventListener('scroll', handleScroll)
+    }
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (cheersHideTimer) clearTimeout(cheersHideTimer)
+    }
+  }, [cheersHideTimer])
+
+  const startAutoHidePopup = () => {
+    if (cheersHideTimer) clearTimeout(cheersHideTimer)
+    const timer = setTimeout(() => setIsCheersOpen(false), 1800)
+    setCheersHideTimer(timer)
+  }
+
   const showCheers = async () => {
     setCheersLoading(true)
     setCheersError(null)
@@ -215,10 +242,12 @@ export default function HomePage() {
       const bustedUrl = `${payload.url}${payload.url.includes('?') ? '&' : '?'}t=${Date.now()}`
       setCheersUrl(bustedUrl)
       setIsCheersOpen(true)
+      startAutoHidePopup()
     } catch (error) {
       console.error('[cheers] Failed to load cheers image', error)
       setCheersError('No beers right now — try again?')
       setIsCheersOpen(true)
+      startAutoHidePopup()
     } finally {
       setCheersLoading(false)
     }
@@ -722,49 +751,54 @@ export default function HomePage() {
           )}
         </section>
       </main>
-      <div className="fixed bottom-4 right-4 z-40 flex flex-col items-end gap-3">
-        {isCheersOpen && (
-          <div className="relative bg-surface/95 border border-border shadow-2xl rounded-xl p-4 w-[260px] backdrop-blur flex flex-col gap-3">
+      {(showCheersButton || isCheersOpen) && (
+        <div className="fixed inset-x-0 bottom-16 sm:bottom-20 z-40 pointer-events-none flex justify-end px-6 sm:px-10">
+          <div className="flex flex-col items-end gap-2 sm:gap-3 pointer-events-auto">
+            {isCheersOpen && (
+              <div className="relative bg-surface/95 border border-border shadow-2xl rounded-xl p-3 sm:p-4 w-[220px] sm:w-[260px] backdrop-blur flex flex-col gap-3">
+                <button
+                  type="button"
+                  className="absolute top-2 right-2 text-muted-foreground hover:text-foreground text-xs"
+                  onClick={() => setIsCheersOpen(false)}
+                >
+                  ✕
+                </button>
+                <div className="flex items-center gap-2">
+                  <Beer className="h-5 w-5 text-amber-300" />
+                  <p className="text-sm font-semibold text-foreground">Cheers, Dave!</p>
+                </div>
+                {cheersLoading ? (
+                  <p className="text-xs text-muted-foreground">Pouring a pint...</p>
+                ) : cheersError ? (
+                  <p className="text-xs text-destructive">{cheersError}</p>
+                ) : cheersUrl ? (
+                  <div className="overflow-hidden rounded-lg border border-border bg-background">
+                    <img
+                      src={cheersUrl}
+                      alt="Cheers!"
+                      className="w-full h-auto object-cover"
+                    />
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground">Tap below to buy Dave a beer.</p>
+                )}
+              </div>
+            )}
+
             <button
               type="button"
-              className="absolute top-2 right-2 text-muted-foreground hover:text-foreground text-xs"
-              onClick={() => setIsCheersOpen(false)}
+              onClick={showCheers}
+              aria-label="Buy Dave a beer"
+              className="group inline-flex items-center gap-2 rounded-full bg-primary text-black font-semibold px-3 py-2 sm:px-4 sm:py-2 shadow-lg hover:scale-105 transition-transform border border-black/10"
             >
-              ✕
-            </button>
-            <div className="flex items-center gap-2">
-              <Beer className="h-5 w-5 text-amber-300" />
-              <p className="text-sm font-semibold text-foreground">Cheers, Dave!</p>
-            </div>
-            {cheersLoading ? (
-              <p className="text-xs text-muted-foreground">Pouring a pint...</p>
-            ) : cheersError ? (
-              <p className="text-xs text-destructive">{cheersError}</p>
-            ) : cheersUrl ? (
-              <div className="overflow-hidden rounded-lg border border-border bg-background">
-                <img
-                  src={cheersUrl}
-                  alt="Cheers!"
-                  className="w-full h-auto object-cover"
-                />
+              <div className="flex items-center justify-center w-9 h-9 sm:w-8 sm:h-8 rounded-full bg-black/10">
+                <SiteLogo size={22} />
               </div>
-            ) : (
-              <p className="text-xs text-muted-foreground">Tap below to buy Dave a beer.</p>
-            )}
+              <span className="text-sm whitespace-nowrap">Buy Dave a beer</span>
+            </button>
           </div>
-        )}
-
-        <button
-          type="button"
-          onClick={showCheers}
-          className="group inline-flex items-center gap-2 rounded-full bg-primary text-black font-semibold px-4 py-2 shadow-lg hover:scale-105 transition-transform border border-black/10"
-        >
-          <div className="flex items-center justify-center w-8 h-8 rounded-full bg-black/10">
-            <SiteLogo size={24} />
-          </div>
-          <span className="text-sm whitespace-nowrap">Buy Dave a beer</span>
-        </button>
-      </div>
+        </div>
+      )}
     </div>
   )
 }
