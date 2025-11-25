@@ -45,6 +45,18 @@ function genreFamily(name: string) {
   return firstWord ? titleCase(firstWord) : 'Other / Unknown'
 }
 
+function normalizeArtistName(raw?: string | null) {
+  const decoded = (raw || '')
+    .replace(/&#x27;|&apos;/g, "'")
+    .replace(/&amp;/g, '&')
+    .replace(/\s*\|\s*$/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  const label = decoded || 'Unknown artist'
+  const key = label.toLowerCase()
+  return { key, label }
+}
+
 export function GenrePopularityList({ picks }: GenrePopularityListProps) {
   const genreStats = useMemo(() => {
     // Count all genres across picks (primary + alternates) to help cluster singletons.
@@ -127,12 +139,39 @@ export function GenrePopularityList({ picks }: GenrePopularityListProps) {
   const [selectedGenre, setSelectedGenre] = useState<string | null>(
     genreStats.length ? genreStats[0].name : null,
   )
+  const [showFamilyList, setShowFamilyList] = useState(true)
 
-    const visibleGenres = useMemo(() => {
-    return genreStats.filter((g) => (selectedFamily ? g.family === selectedFamily : true))
+  const visibleGenres = useMemo(() => {
+    const filtered = genreStats.filter((g) => (selectedFamily ? g.family === selectedFamily : true))
+    if (!selectedFamily) {
+      const allPicks = genreStats.flatMap((g) => g.picks)
+      return [
+        {
+          name: 'All albums',
+          family: 'All',
+          count: allPicks.length,
+          picks: allPicks.sort((a, b) => (b.year ?? 0) - (a.year ?? 0)),
+        },
+        ...filtered,
+      ]
+    }
+    const familyPicks = filtered.flatMap((g) => g.picks)
+    const totalCount = familyPicks.length
+    if (!totalCount) return filtered
+    return [
+      {
+        name: `All ${selectedFamily}`,
+        family: selectedFamily,
+        count: totalCount,
+        picks: familyPicks.sort((a, b) => (b.year ?? 0) - (a.year ?? 0)),
+      },
+      ...filtered,
+    ]
   }, [genreStats, selectedFamily])
 
-  const selectedGenreEntry = genreStats.find((g) => g.name === selectedGenre)
+  const selectedGenreEntry =
+    visibleGenres.find((g) => g.name === selectedGenre) ||
+    genreStats.find((g) => g.name === selectedGenre)
   const timelineData = useMemo(() => {
     if (!selectedGenreEntry || !selectedGenreEntry.picks.length) return null
     const picks = selectedGenreEntry.picks
@@ -142,35 +181,50 @@ export function GenrePopularityList({ picks }: GenrePopularityListProps) {
     const pad = Math.max(1, Math.round((maxY - minY) * 0.05))
     const domainMin = minY - pad
     const domainMax = maxY + pad
-    const artistMinYear = new Map<string, number>()
+    const artistMinYear = new Map<string, { label: string; year: number }>()
     picks.forEach((p) => {
-      const name = (p.artist && p.artist.trim()) || 'Unknown artist'
+      const { key, label } = normalizeArtistName(p.artist)
       const yr = p.year ?? maxY
-      const current = artistMinYear.get(name)
-      if (current == null || yr < current) artistMinYear.set(name, yr)
+      const current = artistMinYear.get(key)
+      if (!current || yr < current.year) artistMinYear.set(key, { label, year: yr })
     })
-    const artists = Array.from(artistMinYear.entries())
-      .sort((a, b) => (a[1] ?? maxY) - (b[1] ?? maxY) || a[0].localeCompare(b[0]))
-      .map(([name]) => name)
+    const artists = Array.from(artistMinYear.values())
+      .sort((a, b) => (a.year ?? maxY) - (b.year ?? maxY) || a.label.localeCompare(b.label))
+      .map((a) => a.label)
     const totalArtists = artists.length
     const rowGap = 48
     const axisTop = 10
     const axisBottomPad = 34
     const canvasHeight = Math.max(320, artists.length * rowGap + axisBottomPad + axisTop)
-    const visibleHeight = Math.min(canvasHeight, axisTop + rowGap * 10 + axisBottomPad + 40)
+    const visibleHeight =
+      artists.length <= 3
+        ? Math.max(240, axisTop + rowGap * Math.max(3, artists.length) + axisBottomPad + 40)
+        : Math.min(canvasHeight, axisTop + rowGap * 10 + axisBottomPad + 40)
     const spanYears = Math.max(1, domainMax - domainMin)
-    const canvasWidth = Math.max(820, Math.min(1600, 30 * spanYears))
-    const leftPad = 60
-    const rightPad = 140
+    const centerYears =
+      spanYears <= 2
+        ? { min: domainMin - 1, max: domainMax + 1 }
+        : { min: domainMin, max: domainMax }
+    const effectiveSpan = centerYears.max - centerYears.min
+    const canvasWidth = Math.max(760, Math.min(1200, 22 * effectiveSpan))
+    const leftPad = 80
+    const rightPad = 80
     const usableWidth = canvasWidth - leftPad - rightPad
+    const logDenom = Math.log(spanYears + 1)
 
     const points = picks.map((p) => {
-      const artistName = (p.artist && p.artist.trim()) || 'Unknown artist'
+      const { label: artistName } = normalizeArtistName(p.artist)
       const yIdx = artists.indexOf(artistName)
       if (yIdx === -1) return null
-      const y = axisTop + (artists.length - 1 - yIdx) * rowGap + 4 // oldest at bottom
+      const yOffset = artists.length <= 10 ? (visibleHeight - canvasHeight) / 2 : 0
+      const y = axisTop + (artists.length - 1 - yIdx) * rowGap + 4 + yOffset // oldest at bottom
       const year = p.year ?? minY
-      const t = (year - domainMin) / Math.max(1, domainMax - domainMin)
+      const logT =
+        logDenom > 0
+          ? Math.log(Math.max(0, year - centerYears.min) + 1) /
+            Math.log(Math.max(1, centerYears.max - centerYears.min) + 1)
+          : 0.5
+      const t = Math.min(1, Math.max(0, logT))
       const x = leftPad + t * usableWidth
       return {
         x,
@@ -206,172 +260,236 @@ export function GenrePopularityList({ picks }: GenrePopularityListProps) {
     }
   }, [selectedGenreEntry])
 
+  const chartOffset = timelineData && timelineData.artists.length <= 10 ? '18rem' : '0'
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-[200px_240px_1fr] gap-3">
-      <div className="rounded-2xl border border-border bg-card p-3 shadow-md">
-        <div className="mb-3 flex items-center justify-between text-sm text-muted-foreground">
-          <span>Families</span>
-          <span>{familyStats.length}</span>
-        </div>
-        <div className="max-h-[70vh] overflow-y-auto pr-1 space-y-1">
-          {familyStats.map((f) => (
-            <button
-              key={f.family}
-              className={`w-full rounded px-3 py-2 text-left transition ${
-                selectedFamily === f.family
-                  ? 'bg-primary/10 text-foreground border border-primary/30'
-                  : 'hover:bg-muted text-foreground'
-              }`}
-              onClick={() => {
-                setSelectedFamily(f.family)
-                const firstGenre = visibleGenres.find((g) => g.family === f.family)
-                if (firstGenre) setSelectedGenre(firstGenre.name)
-              }}
-            >
-              <div className="flex items-center justify-between">
-                <span className="font-medium">{f.family}</span>
-                <span className="text-xs text-muted-foreground">{f.count}</span>
-              </div>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="rounded-2xl border border-border bg-card p-3 shadow-md">
-        <div className="mb-3 flex items-center justify-between text-sm text-muted-foreground">
-          <span>Genres in {selectedFamily || '—'}</span>
-          <span>{visibleGenres.length}</span>
-        </div>
-        <div className="max-h-[70vh] overflow-y-auto pr-1 space-y-1">
-          {visibleGenres.map((g) => (
-            <button
-              key={g.name}
-              className={`w-full rounded px-3 py-2 text-left transition ${
-                selectedGenre === g.name
-                  ? 'bg-primary/10 text-foreground border border-primary/30'
-                  : 'hover:bg-muted text-foreground'
-              }`}
-              onClick={() => setSelectedGenre(g.name)}
-            >
-              <div className="flex items-center justify-between">
-                <span className="font-medium">{g.name}</span>
-                <span className="text-xs text-muted-foreground">{g.count}</span>
-              </div>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="rounded-2xl border border-border bg-card p-3 shadow-md">
-        <div className="mb-3 flex items-center justify-between">
-          <div>
-            <div className="text-lg text-muted-foreground">Selected genre</div>
-            <div className="text-4xl font-extrabold text-foreground">{selectedGenre || '—'}</div>
+    <div className="relative">
+      <div className="rounded-2xl border border-border bg-card p-3 shadow-md relative">
+        <div className="absolute top-3 left-3 z-10 w-64 max-w-[70vw] rounded-xl border border-border bg-background/95 backdrop-blur shadow-lg p-3 space-y-3">
+          <div className="flex items-center justify-between text-sm text-muted-foreground">
+            <span>Filters</span>
+            {selectedFamily && (
+              <button
+                className="text-xs text-foreground font-semibold underline"
+                onClick={() => {
+                  setSelectedFamily(null)
+                  setSelectedGenre(null)
+                  setShowFamilyList(true)
+                }}
+              >
+                Clear family
+              </button>
+            )}
           </div>
-          {selectedGenreEntry && (
-            <div className="text-2xl font-semibold text-foreground">{selectedGenreEntry.count} picks</div>
-          )}
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-semibold text-foreground">
+                {selectedFamily ? `Family: ${selectedFamily}` : 'Choose family'}
+              </span>
+              {selectedFamily && (
+                <button
+                  className="text-xs text-foreground underline"
+                  onClick={() => setShowFamilyList((v) => !v)}
+                >
+                  {showFamilyList ? 'Hide' : 'Change'}
+                </button>
+              )}
+            </div>
+            {showFamilyList && (
+              <div className="space-y-1 mb-1">
+                <button
+                  className={`w-full rounded px-3 py-2 text-left transition ${
+                    selectedFamily === null
+                      ? 'bg-primary/10 text-foreground border border-primary/30'
+                      : 'hover:bg-muted text-foreground'
+                  }`}
+                  onClick={() => {
+                    setSelectedFamily(null)
+                    setSelectedGenre('All albums')
+                  }}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium">All albums</span>
+                  </div>
+                </button>
+              </div>
+            )}
+            {showFamilyList && (
+              <div className="max-h-[30vh] overflow-y-auto pr-1 space-y-1">
+                {familyStats.map((f) => (
+                  <button
+                    key={f.family}
+                    className={`w-full rounded px-3 py-2 text-left transition ${
+                      selectedFamily === f.family
+                        ? 'bg-primary/10 text-foreground border border-primary/30'
+                        : 'hover:bg-muted text-foreground'
+                    }`}
+                    onClick={() => {
+                      setSelectedFamily(f.family)
+                      const firstGenre = visibleGenres.find((g) => g.family === f.family)
+                      if (firstGenre) setSelectedGenre(firstGenre.name)
+                      setShowFamilyList(false)
+                    }}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium">{f.family}</span>
+                      <span className="text-xs text-muted-foreground">{f.count}</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-semibold text-foreground">
+                {selectedFamily ? `Genres in ${selectedFamily}` : 'Genres'}
+              </span>
+              {selectedGenre && (
+                <button
+                  className="text-xs text-foreground underline"
+                  onClick={() => setSelectedGenre(null)}
+                >
+                  Clear genre
+                </button>
+              )}
+            </div>
+            <div className="max-h-[40vh] overflow-y-auto pr-1 space-y-1">
+              {visibleGenres.map((g) => (
+                <button
+                  key={g.name}
+                  className={`w-full rounded px-3 py-2 text-left transition ${
+                    selectedGenre === g.name
+                      ? 'bg-primary/10 text-foreground border border-primary/30'
+                      : 'hover:bg-muted text-foreground'
+                  }`}
+                  onClick={() => setSelectedGenre(g.name)}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium">{g.name}</span>
+                    <span className="text-xs text-muted-foreground">{g.count}</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
 
-        {selectedGenreEntry && timelineData ? (
-          <div className="rounded-xl border border-border/70 bg-muted/20 px-3 py-3">
-            <div className="mb-4 flex items-center justify-between text-lg text-foreground font-semibold">
-              <span>Timeline (year vs artist)</span>
-              <span>
-                Showing {timelineData.artists.length} of {timelineData.totalArtists} artists • {timelineData.domainMin} – {timelineData.domainMax}
-              </span>
+        <div className="mt-4" style={{ marginLeft: chartOffset }}>
+          <div className="mb-3 flex items-center justify-between">
+            <div>
+              <div className="text-lg text-muted-foreground">Selected genre</div>
+              <div className="text-4xl font-extrabold text-foreground">{selectedGenre || '—'}</div>
             </div>
+            {selectedGenreEntry && (
+              <div className="text-2xl font-semibold text-foreground">
+                {selectedGenreEntry.count} picks
+              </div>
+            )}
+          </div>
 
-            <div className="grid grid-cols-[1fr_260px] gap-3">
-              <div className="relative border border-border/60 rounded-lg">
-                <svg width={timelineData.canvasWidth} height={timelineData.canvasHeight} className="block">
-                  <line
-                    x1={timelineData.leftPad}
-                    x2={timelineData.canvasWidth - timelineData.rightPad}
-                    y1={timelineData.canvasHeight - timelineData.axisBottomPad}
-                    y2={timelineData.canvasHeight - timelineData.axisBottomPad}
-                    stroke="rgba(255,255,255,0.2)"
-                  />
-                  <text
-                    x={timelineData.leftPad}
-                    y={timelineData.canvasHeight - timelineData.axisBottomPad + 16}
-                    className="text-[20px] font-extrabold fill-foreground"
-                  >
-                    {timelineData.domainMin}
-                  </text>
-                  <text
-                    x={timelineData.canvasWidth - timelineData.rightPad}
-                    y={timelineData.canvasHeight - timelineData.axisBottomPad + 16}
-                    textAnchor="end"
-                    className="text-[20px] font-extrabold fill-foreground"
-                  >
-                    {timelineData.domainMax}
-                  </text>
-
-                  {timelineData.artists.map((artist, idx) => {
-                    const y =
-                      timelineData.axisTop +
-                      (timelineData.artists.length - 1 - idx) * timelineData.rowGap +
-                      4
-                    return (
-                      <line
-                        key={`grid-${artist}`}
-                        x1={timelineData.leftPad}
-                        x2={timelineData.canvasWidth - timelineData.rightPad}
-                        y1={y}
-                        y2={y}
-                        stroke="rgba(255,255,255,0.06)"
-                      />
-                    )
-                  })}
-
-                  {timelineData.points.map((p, idx) => (
-                    <g key={`${p.artist}-${p.title}-${idx}`}>
-                      <circle
-                        cx={p.x}
-                        cy={p.y}
-                        r={18}
-                        fill="rgba(255,255,255,0.08)"
-                        stroke="rgba(255,255,255,0.3)"
-                        strokeWidth={1}
-                      />
-                      <foreignObject x={p.x - 18} y={p.y - 18} width={36} height={36}>
-                        <div
-                          className="h-[36px] w-[36px] rounded-full border border-border/60 bg-muted bg-cover bg-center shadow"
-                          style={{ backgroundImage: p.artwork ? `url(${p.artwork})` : undefined }}
-                          title={`${p.artist} — ${p.title}${p.year ? ` (${p.year})` : ''}`}
-                        />
-                      </foreignObject>
-                    </g>
-                  ))}
-                </svg>
+          {selectedGenreEntry && timelineData ? (
+            <div className="rounded-xl border border-border/70 bg-muted/20 px-3 py-3">
+              <div className="mb-4 flex items-center justify-between text-lg text-foreground font-semibold">
+                <span>Timeline (year vs artist)</span>
+                <span>
+                  Showing {timelineData.artists.length} of {timelineData.totalArtists} artists •{' '}
+                  {timelineData.domainMin} – {timelineData.domainMax}
+                </span>
               </div>
 
-              <div className="rounded-lg border border-border/60">
-                <div style={{ height: timelineData.canvasHeight, position: 'relative' }}>
-                  {timelineData.artists.map((artist, idx) => {
-                    const y =
-                      timelineData.axisTop +
-                      (timelineData.artists.length - 1 - idx) * timelineData.rowGap +
-                      4
-                    return (
-                      <div
-                        key={`label-${artist}`}
-                        style={{ position: 'absolute', top: y - 12, left: 12 }}
-                        className="text-[20px] font-extrabold text-foreground"
-                      >
-                        {artist}
-                      </div>
-                    )
-                  })}
+              <div className="grid grid-cols-[1fr_260px] gap-3">
+                <div className="relative border border-border/60 rounded-lg">
+                  <svg width={timelineData.canvasWidth} height={timelineData.canvasHeight} className="block">
+                    <line
+                      x1={timelineData.leftPad}
+                      x2={timelineData.canvasWidth - timelineData.rightPad}
+                      y1={timelineData.canvasHeight - timelineData.axisBottomPad}
+                      y2={timelineData.canvasHeight - timelineData.axisBottomPad}
+                      stroke="rgba(255,255,255,0.2)"
+                    />
+                    <text
+                      x={timelineData.leftPad}
+                      y={timelineData.canvasHeight - timelineData.axisBottomPad + 16}
+                      className="text-[20px] font-extrabold fill-foreground"
+                    >
+                      {timelineData.domainMin}
+                    </text>
+                    <text
+                      x={timelineData.canvasWidth - timelineData.rightPad}
+                      y={timelineData.canvasHeight - timelineData.axisBottomPad + 16}
+                      textAnchor="end"
+                      className="text-[20px] font-extrabold fill-foreground"
+                    >
+                      {timelineData.domainMax}
+                    </text>
+
+                    {timelineData.artists.map((artist, idx) => {
+                      const y =
+                        timelineData.axisTop +
+                        (timelineData.artists.length - 1 - idx) * timelineData.rowGap +
+                        4
+                      return (
+                        <line
+                          key={`grid-${artist}`}
+                          x1={timelineData.leftPad}
+                          x2={timelineData.canvasWidth - timelineData.rightPad}
+                          y1={y}
+                          y2={y}
+                          stroke="rgba(255,255,255,0.06)"
+                        />
+                      )
+                    })}
+
+                    {timelineData.points.map((p, idx) => (
+                      <g key={`${p.artist}-${p.title}-${idx}`}>
+                        <circle
+                          cx={p.x}
+                          cy={p.y}
+                          r={18}
+                          fill="rgba(255,255,255,0.08)"
+                          stroke="rgba(255,255,255,0.3)"
+                          strokeWidth={1}
+                        />
+                        <foreignObject x={p.x - 18} y={p.y - 18} width={36} height={36}>
+                          <div
+                            className="h-[36px] w-[36px] rounded-full border border-border/60 bg-muted bg-cover bg-center shadow"
+                            style={{ backgroundImage: p.artwork ? `url(${p.artwork})` : undefined }}
+                            title={`${p.artist} — ${p.title}${p.year ? ` (${p.year})` : ''}`}
+                          />
+                        </foreignObject>
+                      </g>
+                    ))}
+                  </svg>
+                </div>
+
+                <div className="rounded-lg border border-border/60">
+                  <div style={{ height: timelineData.canvasHeight, position: 'relative' }}>
+                    {timelineData.artists.map((artist, idx) => {
+                      const y =
+                        timelineData.axisTop +
+                        (timelineData.artists.length - 1 - idx) * timelineData.rowGap +
+                        4
+                      return (
+                        <div
+                          key={`label-${artist}`}
+                          style={{ position: 'absolute', top: y - 12, left: 12 }}
+                          className="text-[20px] font-extrabold text-foreground"
+                        >
+                          {artist}
+                        </div>
+                      )
+                    })}
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        ) : (
-          <div className="text-sm text-muted-foreground">No genre selected.</div>
-        )}
+          ) : (
+            <div className="text-sm text-muted-foreground">No genre selected.</div>
+          )}
+        </div>
       </div>
     </div>
   )
