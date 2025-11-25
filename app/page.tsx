@@ -520,7 +520,7 @@ export default function HomePage() {
                   rel={latestPickLink ? 'noopener noreferrer' : undefined}
                 >
                   <div className="hero-latest__glow" />
-                  <div className="hero-latest__card">
+                  <div className="hero-latest__card scale-[0.92] md:scale-[0.97] origin-center max-w-[360px] mx-auto">
                     <VinylArtwork
                       artworkUrl={latestPick.album_artwork_url}
                       alt={`${latestPick.album} by ${latestPick.artist}`}
@@ -579,7 +579,7 @@ export default function HomePage() {
                     }}
                   >
                     {/* Album artwork - no face tracker here */}
-                    <div className="relative mb-5 md:mb-6">
+                    <div className="relative mb-5 md:mb-6 transform scale-85 md:scale-90 origin-center">
                       <VinylArtwork
                         artworkUrl={pick.album_artwork_url}
                         alt={`${pick.album} by ${pick.artist}`}

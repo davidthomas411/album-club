@@ -1,57 +1,73 @@
 import { createClient } from '@/lib/supabase/server'
-import { PlaylistCard } from '@/components/playlist-card'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Plus, ListMusic, ExternalLink } from 'lucide-react'
 import { SiteLogo } from '@/components/site-logo'
 import Link from 'next/link'
+import { ExternalLink } from 'lucide-react'
+
+type PickRow = {
+  id: string
+  album: string | null
+  artist: string | null
+  title: string | null
+  platform: string | null
+  platform_url: string
+  album_artwork_url: string | null
+  created_at: string
+  album_label?: string | null
+  album_release_date?: string | null
+  album_release_year?: number | null
+  album_popularity?: number | null
+  album_total_tracks?: number | null
+  album_markets_count?: number | null
+  album_genres?: string[] | null
+  artist_genres?: string[] | null
+  user: { display_name: string } | null
+  weekly_theme: { theme_name: string | null } | null
+}
+
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+export const fetchCache = 'force-no-store'
 
 export default async function PlaylistsPage() {
   const supabase = await createClient()
-  
-  const { data: { user } } = await supabase.auth.getUser()
-  const albumPlaylistUrl = 'https://open.spotify.com/playlist/4P2eOkTLUDOdSoBC71PRsP?si=40e5b828d0c54846'
-  const singlesPlaylistUrl = 'https://open.spotify.com/playlist/5YM1TTHvtf8Do3ntWHK7ya?si=6456c03a613f4055'
-  const featuredPlaylists = [
-    {
-      title: 'Singles Club Playlist',
-      description: 'A living mix of every single shared by the crew.',
-      href: singlesPlaylistUrl,
-      badge: 'Featured',
-    },
-    {
-      title: 'Album Club Official Playlist',
-      description: 'Curated highlights of recent picks. Opens on Spotify and keeps everyone in sync.',
-      href: albumPlaylistUrl,
-      badge: 'Featured',
-    },
-  ]
 
-  // Get all playlists with creator info and item counts
-  const { data: playlists } = await supabase
-    .from('playlists')
+  const { data: picks } = await supabase
+    .from('music_picks')
     .select(`
-      *,
-      creator:profiles!created_by(display_name, avatar_url),
-      weekly_theme:weekly_themes(theme_name)
+      id,
+      album,
+      artist,
+      title,
+      platform,
+      platform_url,
+      album_artwork_url,
+      created_at,
+      album_label,
+      album_release_date,
+      album_release_year,
+      album_popularity,
+      album_total_tracks,
+      album_markets_count,
+      album_genres,
+      artist_genres,
+      user:user_id(display_name),
+      weekly_theme:weekly_theme_id(theme_name)
     `)
     .order('created_at', { ascending: false })
 
-  // Get playlist item counts
-  const playlistsWithCounts = await Promise.all(
-    (playlists || []).map(async (playlist) => {
-      const { count } = await supabase
-        .from('playlist_items')
-        .select('*', { count: 'exact', head: true })
-        .eq('playlist_id', playlist.id)
-      
-      return { ...playlist, itemCount: count || 0 }
-    })
-  )
+  const rows: PickRow[] = picks || []
+
+  const formatDate = (iso: string) => {
+    try {
+      return new Date(iso).toISOString().slice(0, 10)
+    } catch {
+      return '—'
+    }
+  }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background" suppressHydrationWarning>
       {/* Header */}
       <header className="border-b border-border bg-card">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
@@ -59,115 +75,114 @@ export default async function PlaylistsPage() {
             <SiteLogo size={40} className="bg-primary/10 p-1" />
             <h1 className="text-2xl font-bold text-foreground">AlbumClub</h1>
           </Link>
-          <nav className="flex items-center gap-4">
-            <Link href="/feed">
-              <Button variant="ghost">Feed</Button>
-            </Link>
-            <Link href="/playlists">
-              <Button variant="ghost">Playlists</Button>
-            </Link>
-            <Link href="/create-playlist">
-              <Button>
-                <Plus className="h-4 w-4 mr-2" />
-                New Playlist
-              </Button>
-            </Link>
+          <nav className="flex items-center gap-4 text-sm">
+            <Link href="/feed" className="text-muted-foreground hover:text-foreground transition-colors">Feed</Link>
+            <Link href="/playlists" className="text-foreground font-semibold">Playlist</Link>
           </nav>
         </div>
       </header>
 
       <div className="container mx-auto px-4 py-12">
-        <div className="mb-8">
-          <h2 className="text-3xl font-bold text-foreground mb-2">
-            Community Playlists
-          </h2>
+        <div className="mb-8 flex flex-col gap-2">
+          <h2 className="text-3xl font-bold text-foreground">Album Club Playlist</h2>
           <p className="text-muted-foreground">
-            Collaborative collections from weekly picks
+            The full catalogue of picks. Filterable, sortable, and ready for deeper stats.
           </p>
         </div>
 
-        {playlistsWithCounts.length > 0 ? (
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {featuredPlaylists.map((playlist) => (
-              <a
-                key={playlist.title}
-                href={playlist.href}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block h-full"
-              >
-                <Card className="hover:shadow-lg transition-shadow h-full">
-                  <CardHeader>
-                    <div className="flex items-start justify-between gap-4 mb-2">
-                      <SiteLogo size={48} className="bg-primary/10 p-1 rounded-lg" />
-                      <Badge variant="secondary">{playlist.badge}</Badge>
-                    </div>
-                    <CardTitle className="text-xl">{playlist.title}</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <p className="text-sm text-muted-foreground leading-relaxed">
-                      {playlist.description}
-                    </p>
-                    <div className="flex items-center justify-between text-sm text-primary font-semibold">
-                      Open Playlist
-                      <ExternalLink className="h-4 w-4" />
-                    </div>
-                  </CardContent>
-                </Card>
-              </a>
-            ))}
-            {playlistsWithCounts.map((playlist) => (
-              <PlaylistCard key={playlist.id} playlist={playlist} />
-            ))}
-          </div>
-        ) : (
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {featuredPlaylists.map((playlist) => (
-              <a
-                key={playlist.title}
-                href={playlist.href}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block h-full"
-              >
-                <Card className="hover:shadow-lg transition-shadow h-full">
-                  <CardHeader>
-                    <div className="flex items-start justify-between gap-4 mb-2">
-                      <SiteLogo size={48} className="bg-primary/10 p-1 rounded-lg" />
-                      <Badge variant="secondary">{playlist.badge}</Badge>
-                    </div>
-                    <CardTitle className="text-xl">{playlist.title}</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <p className="text-sm text-muted-foreground leading-relaxed">
-                      {playlist.description}
-                    </p>
-                    <div className="flex items-center justify-between text-sm text-primary font-semibold">
-                      Open Playlist
-                      <ExternalLink className="h-4 w-4" />
-                    </div>
-                  </CardContent>
-                </Card>
-              </a>
-            ))}
-            <Card>
-              <CardContent className="p-12 text-center">
-                <ListMusic className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                <p className="text-lg text-muted-foreground mb-4">
-                  No community playlists yet. Create the first one!
-                </p>
-                {user && (
-                  <Link href="/create-playlist">
-                    <Button>
-                      <Plus className="h-4 w-4 mr-2" />
-                      Create Playlist
-                    </Button>
-                  </Link>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-        )}
+        <div className="overflow-x-auto rounded-xl border border-border bg-card">
+          <table className="min-w-full text-sm">
+            <thead className="bg-muted/40 text-muted-foreground">
+              <tr>
+                <th className="px-4 py-3 text-left font-semibold">Album</th>
+                <th className="px-4 py-3 text-left font-semibold">Artist</th>
+                <th className="px-4 py-3 text-left font-semibold">Picker</th>
+                <th className="px-4 py-3 text-left font-semibold">Theme</th>
+                <th className="px-4 py-3 text-left font-semibold">Date</th>
+                <th className="px-4 py-3 text-left font-semibold">Platform</th>
+                <th className="px-4 py-3 text-left font-semibold">Label</th>
+                <th className="px-4 py-3 text-left font-semibold">Year</th>
+                <th className="px-4 py-3 text-left font-semibold">Genres</th>
+                <th className="px-4 py-3 text-left font-semibold">Popularity</th>
+                <th className="px-4 py-3 text-left font-semibold">Tracks</th>
+                <th className="px-4 py-3 text-left font-semibold">Origin</th>
+                <th className="px-4 py-3 text-left font-semibold">Link</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((pick) => {
+                const albumTitle = pick.album || pick.title || 'Untitled'
+                const artist = pick.artist || 'Unknown artist'
+                const picker = pick.user?.display_name || 'Unknown'
+                const theme = pick.weekly_theme?.theme_name || 'No theme'
+                const date = pick.created_at ? formatDate(pick.created_at) : '—'
+                const platform = pick.platform || 'other'
+                const label = pick.album_label || '—'
+                const releaseYear =
+                  pick.album_release_year ||
+                  (pick.album_release_date ? new Date(pick.album_release_date).getFullYear() : null) ||
+                  '—'
+                const genres = pick.album_genres?.length
+                  ? pick.album_genres.join(', ')
+                  : pick.artist_genres?.slice(0, 3).join(', ') || '—'
+                const popularity = pick.album_popularity ?? '—'
+                const tracks = pick.album_total_tracks ?? '—'
+                const origin = pick.artist_genres?.length ? pick.artist_genres[0] : '—'
+                return (
+                  <tr key={pick.id} className="border-t border-border/70 hover:bg-muted/10">
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-3">
+                        {pick.album_artwork_url ? (
+                          <img
+                            src={pick.album_artwork_url}
+                            alt={albumTitle}
+                            className="w-12 h-12 rounded-md object-cover border border-border/60"
+                          />
+                        ) : (
+                          <div className="w-12 h-12 rounded-md border border-border/60 bg-muted/40" />
+                        )}
+                        <div>
+                          <div className="font-semibold text-foreground">{albumTitle}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-foreground">{artist}</td>
+                    <td className="px-4 py-3 text-foreground">{picker}</td>
+                    <td className="px-4 py-3">
+                      <Badge variant="outline">{theme}</Badge>
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground">{date}</td>
+                    <td className="px-4 py-3">
+                      <Badge variant="secondary" className="capitalize">
+                        {platform}
+                      </Badge>
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground">{label}</td>
+                    <td className="px-4 py-3 text-muted-foreground">{releaseYear}</td>
+                    <td className="px-4 py-3 text-muted-foreground max-w-[220px] truncate">{genres}</td>
+                    <td className="px-4 py-3 text-muted-foreground">{popularity}</td>
+                    <td className="px-4 py-3 text-muted-foreground">{tracks}</td>
+                    <td className="px-4 py-3 text-muted-foreground">{origin}</td>
+                    <td className="px-4 py-3">
+                      <a
+                        href={pick.platform_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-primary hover:underline"
+                      >
+                        Open <ExternalLink className="h-4 w-4" />
+                      </a>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="mt-6 text-xs text-muted-foreground">
+          Stats columns (Label, Producer, Origin) are placeholders. We can enrich these with Spotify API data next to power queries like “Ferg picks female American artists 23% of the time.”
+        </div>
       </div>
     </div>
   )

@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
-import { Home, ListMusic, Plus, Search, Shield, X, Music, LogIn, UserPlus } from 'lucide-react'
+import { Home, Plus, Search, Shield, X, Music, LogIn, UserPlus, Map } from 'lucide-react'
 import { createBrowserClient } from '@/lib/supabase/client'
 import {
   Select,
@@ -60,7 +60,7 @@ export function Sidebar({ onClose }: SidebarProps) {
   const links = [
     { href: '/', label: 'Home', icon: Home },
     { href: '/feed', label: 'Feed', icon: Music },
-    { href: '/playlists', label: 'Playlists', icon: ListMusic },
+    { href: '/music-map', label: 'Music Map', icon: Map },
     { href: '/search', label: 'Search', icon: Search },
     { href: '/admin', label: 'Admin', icon: Shield },
   ]
