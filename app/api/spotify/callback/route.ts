@@ -106,10 +106,10 @@ export async function GET(request: Request) {
     let siteUrl = process.env.NEXT_PUBLIC_SITE_URL || `${url.protocol}//${url.host}`
     let redirectUrl: URL
     try {
-      redirectUrl = new URL('/music-map', siteUrl)
+      redirectUrl = new URL('/genre-playlists', siteUrl)
     } catch {
       // Fallback if NEXT_PUBLIC_SITE_URL is malformed
-      redirectUrl = new URL('/music-map', url.origin)
+      redirectUrl = new URL('/genre-playlists', url.origin)
     }
     const res = NextResponse.redirect(redirectUrl)
     res.cookies.set('spotify_code_verifier', '', { path: '/', maxAge: 0 })
