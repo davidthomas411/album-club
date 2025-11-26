@@ -277,7 +277,14 @@ export function GenrePopularityList({ picks }: GenrePopularityListProps) {
   }
 
   const buildPayload = () => ({
-    name: `Album Club — ${selectionLabel}`,
+    name: (() => {
+      const parts = [`Album Club — ${selectionLabel}`]
+      const excludes: string[] = []
+      if (excludedGenres.length) excludes.push(`- genres: ${excludedGenres.join(', ')}`)
+      if (excludedPickers.length) excludes.push(`- pickers: ${excludedPickers.join(', ')}`)
+      if (excludes.length) parts.push(`(${excludes.join(' | ')})`)
+      return parts.join(' ')
+    })(),
     picks: selectedPicks.map((p) => ({
       id: p.id,
       artist: p.artist,
