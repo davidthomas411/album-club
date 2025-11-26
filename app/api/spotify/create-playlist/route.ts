@@ -211,6 +211,7 @@ export async function POST(req: Request) {
       added: uris.length,
     })
   } catch (err: any) {
+    console.error('[create-playlist] failed', err)
     return NextResponse.json({ error: err?.message || 'Unknown error' }, { status: 500 })
   }
 }
