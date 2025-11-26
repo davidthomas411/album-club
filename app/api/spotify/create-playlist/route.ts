@@ -139,30 +139,33 @@ export async function POST(req: Request) {
     const me = await meRes.json()
     const userId = me.id
 
-    const uris: string[] = []
-    for (const p of picks) {
-      // Prefer direct track link
-      const trackUri = extractTrackUri(p.platform_url)
-      if (trackUri) {
-        uris.push(trackUri)
-        continue
-      }
-      // If album link, pick first track
-      const albumId = extractAlbumId(p.platform_url)
-      if (albumId) {
-        const uri = await fetchAlbumTracks(accessToken, albumId)
-        if (uri) {
-          uris.push(uri)
-          continue
+    // Resolve URIs in parallel to speed things up
+    const resolved = await Promise.all(
+      picks.map(async (p) => {
+        // Prefer direct track link
+        const direct = extractTrackUri(p.platform_url)
+        if (direct) return direct
+
+        // Album link: grab first track
+        const albumId = extractAlbumId(p.platform_url)
+        if (albumId) {
+          const uri = await fetchAlbumTracks(accessToken, albumId)
+          if (uri) return uri
         }
-      }
-      // Fallback search
-      const qParts = [p.artist, p.title || p.album].filter(Boolean) as string[]
-      if (!qParts.length) continue
-      const q = qParts.join(' ')
-      const uri = await searchTrack(accessToken, q)
-      if (uri) uris.push(uri)
-    }
+
+        // Fallback search
+        const qParts = [p.artist, p.title || p.album].filter(Boolean) as string[]
+        if (!qParts.length) return null
+        const q = qParts.join(' ')
+        return await searchTrack(accessToken, q)
+      }),
+    )
+
+    const uriSet = new Set<string>()
+    resolved.forEach((u) => {
+      if (u) uriSet.add(u)
+    })
+    const uris = Array.from(uriSet)
 
     if (!uris.length) {
       return NextResponse.json({ error: 'No Spotify tracks found for these picks' }, { status: 400 })

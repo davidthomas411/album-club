@@ -169,96 +169,59 @@ export function GenrePopularityList({ picks }: GenrePopularityListProps) {
     }
     return 'All albums'
   }, [selectedFamilies, selectedGenres])
-  const timelineData = useMemo(() => {
-    if (!selectedPicks.length) return null
-    const picks = selectedPicks
-    const years = picks.map((p) => p.year).filter((y): y is number => !!y)
-    const minY = years.length ? Math.min(...years) : 1990
-    const maxY = years.length ? Math.max(...years) : 2025
-    const pad = Math.max(1, Math.round((maxY - minY) * 0.05))
-    const domainMin = minY - pad
-    const domainMax = maxY + pad
-    const artistMinYear = new Map<string, { label: string; year: number }>()
-    picks.forEach((p) => {
-      const { key, label } = normalizeArtistName(p.artist)
-      const yr = p.year ?? maxY
-      const current = artistMinYear.get(key)
-      if (!current || yr < current.year) artistMinYear.set(key, { label, year: yr })
-    })
-    const artists = Array.from(artistMinYear.values())
-      .sort((a, b) => (a.year ?? maxY) - (b.year ?? maxY) || a.label.localeCompare(b.label))
-      .map((a) => a.label)
-    const totalArtists = artists.length
-    const rowGap = 48
-    const axisTop = 10
-    const axisBottomPad = 34
-    const canvasHeight = Math.max(320, artists.length * rowGap + axisBottomPad + axisTop)
-    const visibleHeight =
-      artists.length <= 3
-        ? Math.max(240, axisTop + rowGap * Math.max(3, artists.length) + axisBottomPad + 40)
-        : Math.min(canvasHeight, axisTop + rowGap * 10 + axisBottomPad + 40)
-    const spanYears = Math.max(1, domainMax - domainMin)
-    const centerYears =
-      spanYears <= 2
-        ? { min: domainMin - 1, max: domainMax + 1 }
-        : { min: domainMin, max: domainMax }
-    const effectiveSpan = centerYears.max - centerYears.min
-    const canvasWidth = Math.max(760, Math.min(1200, 22 * effectiveSpan))
-    const leftPad = 80
-    const rightPad = 80
-    const usableWidth = canvasWidth - leftPad - rightPad
-    const logDenom = Math.log(spanYears + 1)
 
-    const points = picks.map((p) => {
-      const { label: artistName } = normalizeArtistName(p.artist)
-      const yIdx = artists.indexOf(artistName)
-      if (yIdx === -1) return null
-      const yOffset = artists.length <= 10 ? (visibleHeight - canvasHeight) / 2 : 0
-      const y = axisTop + (artists.length - 1 - yIdx) * rowGap + 4 + yOffset // oldest at bottom
-      const year = p.year ?? minY
-      const logT =
-        logDenom > 0
-          ? Math.log(Math.max(0, year - centerYears.min) + 1) /
-            Math.log(Math.max(1, centerYears.max - centerYears.min) + 1)
-          : 0.5
-      const t = Math.min(1, Math.max(0, logT))
-      const x = leftPad + t * usableWidth
-      return {
-        x,
-        y,
-        title: p.title,
-        artist: artistName,
-        year,
-        artwork: p.artwork,
-      }
-    }).filter(Boolean) as {
+  const clusterData = useMemo(() => {
+    if (!selectedPicks.length) return null
+    const maxNodes = Math.min(selectedPicks.length, 200)
+    const padding = 24
+    const cols = 10
+    const spacing = 74
+    const seen = new Set<string>()
+    const nodes: Array<{
       x: number
       y: number
       title: string
       artist: string
-      year: number
       artwork?: string | null
-    }[]
+      id: string
+      shortArtist: string
+    }> = []
 
-    return {
-      canvasHeight,
-      canvasWidth,
-      leftPad,
-      rightPad,
-      axisTop,
-      axisBottomPad,
-      domainMin,
-      domainMax,
-      artists,
-      totalArtists,
-      rowGap,
-      visibleHeight,
-      points,
+    for (let idx = 0; idx < selectedPicks.length && nodes.length < maxNodes; idx++) {
+      const p = selectedPicks[idx]
+      const { label: artistName, key: artistKey } = normalizeArtistName(p.artist)
+      const albumTitle = (p.title || p.album || 'Untitled').trim()
+      const uniqueKey = `${artistKey}::${albumTitle.toLowerCase()}`
+      if (seen.has(uniqueKey)) continue
+      seen.add(uniqueKey)
+
+      const col = nodes.length % cols
+      const row = Math.floor(nodes.length / cols)
+      const x = padding + col * spacing
+      const y = padding + row * spacing
+
+      const maxLabel = 14
+      const shortArtist =
+        artistName.length > maxLabel ? `${artistName.slice(0, maxLabel - 1)}…` : artistName
+
+      nodes.push({
+        x,
+        y,
+        title: albumTitle,
+        artist: artistName,
+        artwork: p.artwork,
+        id: p.id,
+        shortArtist,
+      })
     }
+
+    const width = padding * 2 + spacing * (cols - 1)
+    const height = padding * 2 + spacing * (Math.ceil(maxNodes / cols) - 1 || 1)
+    return { nodes, width, height }
   }, [selectedPicks])
 
   const overlayWidth = 240
-  const contentOffset = showFilters ? `${overlayWidth + 16}px` : '0'
+  const contentOffsetClass = showFilters ? 'md:pl-[260px]' : ''
 
   const toggleFamily = (fam: string | null) => {
     if (fam === null) {
@@ -352,7 +315,7 @@ export function GenrePopularityList({ picks }: GenrePopularityListProps) {
       <div className="rounded-2xl border border-border bg-card p-3 shadow-md relative">
         {showFilters ? (
           <div
-            className="absolute top-3 left-3 z-10 w-[240px] max-w-[70vw] rounded-xl border border-border bg-background/95 backdrop-blur shadow-lg p-3 space-y-3"
+            className="absolute top-3 left-3 z-10 w-[240px] max-w-[70vw] rounded-xl border border-border bg-background/95 backdrop-blur shadow-lg p-3 space-y-4"
           >
           <div className="flex items-center justify-between text-sm text-muted-foreground">
             <span>Filters</span>
@@ -422,7 +385,7 @@ export function GenrePopularityList({ picks }: GenrePopularityListProps) {
             )}
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-2 pt-2 border-t border-border/60">
             <div className="flex items-center justify-between">
               <span className="text-sm font-semibold text-foreground">
                 {selectedFamilies.length ? `Genres in ${selectedFamilies.join(', ')}` : 'Genres'}
@@ -473,7 +436,7 @@ export function GenrePopularityList({ picks }: GenrePopularityListProps) {
           </button>
         )}
 
-        <div className="mt-4" style={{ paddingLeft: contentOffset }}>
+        <div className={`mt-4 ${contentOffsetClass}`}>
           <div className="mb-3 flex items-center justify-between">
             <div>
               <div className="text-lg text-muted-foreground">Selected</div>
@@ -486,101 +449,62 @@ export function GenrePopularityList({ picks }: GenrePopularityListProps) {
             )}
           </div>
 
-          {timelineData ? (
+          {clusterData ? (
             <div className="rounded-xl border border-border/70 bg-muted/20 px-3 py-3">
               <div className="mb-4 flex flex-wrap items-center justify-between gap-3 text-lg text-foreground font-semibold">
                 <div className="flex items-center gap-3">
-                  <span>Timeline (year vs artist)</span>
                   <span>
-                    Showing {timelineData.artists.length} of {timelineData.totalArtists} artists •{' '}
-                    {timelineData.domainMin} – {timelineData.domainMax}
+                    Showing {clusterData.nodes.length} of {selectedPicks.length} picks
                   </span>
                 </div>
                 {selectedPicks.length > 0 && (
                   <div className="flex items-center gap-2">
                     <button
                       onClick={createPlaylist}
-                      className="rounded-full bg-primary text-black font-semibold px-4 py-2 text-sm hover:bg-primary-hover transition"
+                      disabled={isCreating}
+                      className={`rounded-full bg-primary text-black font-semibold px-4 py-2 text-sm transition ${
+                        isCreating ? 'opacity-70 cursor-not-allowed' : 'hover:bg-primary-hover'
+                      }`}
                     >
-                      Create Spotify playlist
+                      {isCreating ? 'Creating…' : 'Create Spotify playlist'}
                     </button>
                   </div>
                 )}
               </div>
 
-              <div className="grid grid-cols-[1fr_300px] gap-6 items-start">
-                <div className="relative border border-border/60 rounded-lg">
-                  <svg width={timelineData.canvasWidth} height={timelineData.canvasHeight} className="block">
-                    <line
-                      x1={timelineData.leftPad}
-                      x2={timelineData.canvasWidth - timelineData.rightPad}
-                      y1={timelineData.canvasHeight - timelineData.axisBottomPad}
-                      y2={timelineData.canvasHeight - timelineData.axisBottomPad}
-                      stroke="rgba(255,255,255,0.2)"
-                    />
-                    <text
-                      x={timelineData.leftPad}
-                      y={timelineData.canvasHeight - timelineData.axisBottomPad + 16}
-                      className="text-[20px] font-extrabold fill-foreground"
-                    >
-                      {timelineData.domainMin}
-                    </text>
-                    <text
-                      x={timelineData.canvasWidth - timelineData.rightPad}
-                      y={timelineData.canvasHeight - timelineData.axisBottomPad + 16}
-                      textAnchor="end"
-                      className="text-[20px] font-extrabold fill-foreground"
-                    >
-                      {timelineData.domainMax}
-                    </text>
-
-                    {timelineData.artists.map((artist, idx) => {
-                      const y =
-                        timelineData.axisTop +
-                        (timelineData.artists.length - 1 - idx) * timelineData.rowGap +
-                        4
-                      return (
-                        <line
-                          key={`grid-${artist}`}
-                          x1={timelineData.leftPad}
-                          x2={timelineData.canvasWidth - timelineData.rightPad}
-                          y1={y}
-                          y2={y}
-                          stroke="rgba(255,255,255,0.06)"
-                        />
-                      )
-                    })}
-
-                    {timelineData.points.map((p, idx) => (
-                      <g key={`${p.artist}-${p.title}-${idx}`}>
+              <div className="relative border border-border/60 rounded-lg bg-background/60">
+                <div className="w-full overflow-auto">
+                  <svg
+                    viewBox={`0 0 ${clusterData.width} ${clusterData.height}`}
+                    className="block w-full h-full min-h-[320px]"
+                    preserveAspectRatio="xMidYMid meet"
+                  >
+                    {clusterData.nodes.map((p) => (
+                      <g key={p.id} transform={`translate(${p.x},${p.y})`}>
                         <circle
-                          cx={p.x}
-                          cy={p.y}
-                          r={18}
+                          r={22}
                           fill="rgba(255,255,255,0.08)"
                           stroke="rgba(255,255,255,0.3)"
                           strokeWidth={1}
                         />
-                        <foreignObject x={p.x - 18} y={p.y - 18} width={36} height={36}>
+                        <foreignObject x={-22} y={-22} width={44} height={44}>
                           <div
-                            className="h-[36px] w-[36px] rounded-full border border-border/60 bg-muted bg-cover bg-center shadow"
+                            className="h-[44px] w-[44px] rounded-full border border-border/60 bg-muted bg-cover bg-center shadow"
                             style={{ backgroundImage: p.artwork ? `url(${p.artwork})` : undefined }}
-                            title={`${p.artist} — ${p.title}${p.year ? ` (${p.year})` : ''}`}
+                            title={`${p.artist} — ${p.title}`}
                           />
                         </foreignObject>
+                        <text
+                          x={0}
+                          y={32}
+                          textAnchor="middle"
+                          className="text-[10px] fill-foreground/80 font-semibold pointer-events-none"
+                        >
+                          {p.shortArtist}
+                        </text>
                       </g>
                     ))}
                   </svg>
-                </div>
-
-                <div className="rounded-lg border border-border/60 p-3">
-                  <div className="space-y-3">
-                    {timelineData.artists.map((artist, idx) => (
-                      <div key={`label-${artist}`} className="text-[18px] font-extrabold text-foreground">
-                        {artist}
-                      </div>
-                    ))}
-                  </div>
                 </div>
               </div>
             </div>
