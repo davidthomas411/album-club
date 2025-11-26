@@ -10,6 +10,7 @@ type PickInput = {
   artwork?: string | null
   artist?: string
   genres?: string[]
+  picker?: string
 }
 
 interface GenrePopularityListProps {
@@ -135,9 +136,22 @@ export function GenrePopularityList({ picks }: GenrePopularityListProps) {
 
   const [selectedFamilies, setSelectedFamilies] = useState<string[]>([])
   const [selectedGenres, setSelectedGenres] = useState<string[]>([])
+  const [excludedGenres, setExcludedGenres] = useState<string[]>([])
+  const [excludedPickers, setExcludedPickers] = useState<string[]>([])
   const [showFamilyList, setShowFamilyList] = useState(true)
   const [isCreating, setIsCreating] = useState(false)
   const [showFilters, setShowFilters] = useState(true)
+
+  const pickerCounts = useMemo(() => {
+    const map = new Map<string, number>()
+    picks.forEach((p) => {
+      const name = p.picker || 'Unknown'
+      map.set(name, (map.get(name) || 0) + 1)
+    })
+    return Array.from(map.entries()).map(([picker, count]) => ({ picker, count })).sort(
+      (a, b) => b.count - a.count || a.picker.localeCompare(b.picker),
+    )
+  }, [picks])
 
   const visibleGenres = useMemo(() => {
     const filtered =
@@ -157,8 +171,17 @@ export function GenrePopularityList({ picks }: GenrePopularityListProps) {
       selectedFamilies.length === 0
         ? genreStats
         : genreStats.filter((g) => selectedFamilies.includes(g.family))
-    return base.flatMap((g) => g.picks)
-  }, [genreStats, selectedFamilies, selectedGenres])
+    const filtered = base.flatMap((g) => g.picks)
+    return filtered.filter((p) => {
+      const combinedGenres = [p.genre, ...(p.genres || [])].filter(Boolean) as string[]
+      const genreBlocked = excludedGenres.length
+        ? combinedGenres.some((g) => excludedGenres.includes(g))
+        : false
+      const pickerBlocked =
+        excludedPickers.length && p.picker ? excludedPickers.includes(p.picker) : false
+      return !genreBlocked && !pickerBlocked
+    })
+  }, [genreStats, selectedFamilies, selectedGenres, excludedGenres, excludedPickers])
 
   const selectionLabel = useMemo(() => {
     if (selectedGenres.length > 0) {
@@ -237,6 +260,18 @@ export function GenrePopularityList({ picks }: GenrePopularityListProps) {
 
   const toggleGenre = (name: string) => {
     setSelectedGenres((prev) =>
+      prev.includes(name) ? prev.filter((g) => g !== name) : [...prev, name],
+    )
+  }
+
+  const toggleExcludedGenre = (name: string) => {
+    setExcludedGenres((prev) =>
+      prev.includes(name) ? prev.filter((g) => g !== name) : [...prev, name],
+    )
+  }
+
+  const toggleExcludedPicker = (name: string) => {
+    setExcludedPickers((prev) =>
       prev.includes(name) ? prev.filter((g) => g !== name) : [...prev, name],
     )
   }
@@ -413,6 +448,68 @@ export function GenrePopularityList({ picks }: GenrePopularityListProps) {
                   <div className="flex items-center justify-between">
                     <span className="font-medium">{g.name}</span>
                     <span className="text-xs text-muted-foreground">{g.count}</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="space-y-2 pt-2 border-t border-border/60">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-semibold text-foreground">Exclude genres</span>
+              {excludedGenres.length > 0 && (
+                <button
+                  className="text-xs text-foreground underline"
+                  onClick={() => setExcludedGenres([])}
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+            <div className="max-h-[30vh] overflow-y-auto pr-1 space-y-1">
+              {genreStats.map((g) => (
+                <button
+                  key={`ex-${g.name}`}
+                  className={`w-full rounded px-3 py-2 text-left transition ${
+                    excludedGenres.includes(g.name)
+                      ? 'bg-destructive/20 text-foreground border border-destructive/40'
+                      : 'hover:bg-muted text-foreground'
+                  }`}
+                  onClick={() => toggleExcludedGenre(g.name)}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium">{g.name}</span>
+                    <span className="text-xs text-muted-foreground">{g.count}</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="space-y-2 pt-2 border-t border-border/60">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-semibold text-foreground">Exclude pickers</span>
+              {excludedPickers.length > 0 && (
+                <button
+                  className="text-xs text-foreground underline"
+                  onClick={() => setExcludedPickers([])}
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+            <div className="max-h-[30vh] overflow-y-auto pr-1 space-y-1">
+              {pickerCounts.map((p) => (
+                <button
+                  key={`picker-${p.picker}`}
+                  className={`w-full rounded px-3 py-2 text-left transition ${
+                    excludedPickers.includes(p.picker)
+                      ? 'bg-destructive/20 text-foreground border border-destructive/40'
+                      : 'hover:bg-muted text-foreground'
+                  }`}
+                  onClick={() => toggleExcludedPicker(p.picker)}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium">{p.picker}</span>
+                    <span className="text-xs text-muted-foreground">{p.count}</span>
                   </div>
                 </button>
               ))}
