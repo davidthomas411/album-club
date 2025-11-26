@@ -20,6 +20,22 @@ type PickRow = {
 
 export const dynamic = 'force-dynamic'
 
+function isAlbumUrl(url?: string | null) {
+  if (!url) return false
+  const u = url.toLowerCase()
+  const isTrack =
+    u.includes('/track/') ||
+    u.includes('spotify:track') ||
+    u.includes('/song/') ||
+    u.includes('/single/')
+  if (isTrack) return false
+  const isAlbum =
+    u.includes('/album/') ||
+    u.includes('album?') ||
+    u.includes('album=')
+  return isAlbum
+}
+
 export default async function MusicMapPage() {
   const supabase = await createClient()
   const { data } = await supabase
@@ -41,7 +57,9 @@ export default async function MusicMapPage() {
     .order('created_at', { ascending: false })
 
   const picks =
-    data?.map((row) => {
+    data
+      ?.filter((row) => isAlbumUrl(row.platform_url))
+      .map((row) => {
       const primaryGenre =
         (row.album_genres && row.album_genres[0]) ||
         (row.artist_genres && row.artist_genres[0]) ||

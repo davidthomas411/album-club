@@ -38,6 +38,22 @@ interface MusicPick {
   } | null
 }
 
+const isAlbumUrl = (url?: string | null) => {
+  if (!url) return false
+  const u = url.toLowerCase()
+  const isTrack =
+    u.includes('/track/') ||
+    u.includes('spotify:track') ||
+    u.includes('/song/') ||
+    u.includes('/single/')
+  if (isTrack) return false
+  const isAlbum =
+    u.includes('/album/') ||
+    u.includes('album?') ||
+    u.includes('album=')
+  return isAlbum
+}
+
 const CORE_MEMBERS = [
   { id: 'neil', displayName: 'Neil', facePrefix: 'neil' },
   { id: 'ferg', displayName: 'Ferg', facePrefix: 'ferg' },
@@ -281,7 +297,7 @@ export default function HomePage() {
 
       console.log('[v0] Picks query result:', { picksData, picksError, count: picksData?.length || 0 })
       if (picksData) {
-        setWeeklyPicks(picksData)
+        setWeeklyPicks(picksData.filter((p) => isAlbumUrl(p.platform_url)))
       }
     }
 
@@ -316,7 +332,7 @@ export default function HomePage() {
           const bDate = b.weekly_theme?.week_start_date || b.created_at || ''
           return bDate.localeCompare(aDate)
         })
-        setRecentPicks(sorted)
+        setRecentPicks(sorted.filter((p) => isAlbumUrl(p.platform_url)))
       }
     }
 
