@@ -82,14 +82,14 @@ export default async function MusicMapPage() {
             <Link href="/playlists" className="text-muted-foreground hover:text-foreground transition-colors">
               Playlist
             </Link>
-            <span className="text-foreground font-semibold">Music Map</span>
+            <span className="text-foreground font-semibold">Genre Playlists</span>
           </nav>
         </div>
       </header>
 
       <div className="container mx-auto px-4 py-8 space-y-4">
         <div className="flex flex-col gap-1">
-          <h2 className="text-3xl font-bold text-foreground">Music Map</h2>
+          <h2 className="text-3xl font-bold text-foreground">Genre Playlists</h2>
         </div>
 
         <GenrePopularityList picks={picks} />

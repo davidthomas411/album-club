@@ -102,7 +102,7 @@ export async function GET(request: Request) {
       )
     }
 
-    // Redirect back to Music Map (or homepage) after success
+    // Redirect back to Genre Playlists (or homepage) after success
     let siteUrl = process.env.NEXT_PUBLIC_SITE_URL || `${url.protocol}//${url.host}`
     let redirectUrl: URL
     try {

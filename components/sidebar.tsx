@@ -60,7 +60,7 @@ export function Sidebar({ onClose }: SidebarProps) {
   const links = [
     { href: '/', label: 'Home', icon: Home },
     { href: '/feed', label: 'Feed', icon: Music },
-    { href: '/music-map', label: 'Music Map', icon: Map },
+    { href: '/music-map', label: 'Genre Playlists', icon: Map },
     { href: '/search', label: 'Search', icon: Search },
     { href: '/admin', label: 'Admin', icon: Shield },
   ]
