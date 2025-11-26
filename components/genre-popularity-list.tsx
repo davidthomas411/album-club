@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 
 type PickInput = {
   id: string
@@ -133,48 +133,45 @@ export function GenrePopularityList({ picks }: GenrePopularityListProps) {
     )
   }, [genreStats])
 
-  const [selectedFamily, setSelectedFamily] = useState<string | null>(
-    familyStats.length ? familyStats[0].family : null,
-  )
-  const [selectedGenre, setSelectedGenre] = useState<string | null>(
-    genreStats.length ? genreStats[0].name : null,
-  )
+  const [selectedFamilies, setSelectedFamilies] = useState<string[]>([])
+  const [selectedGenres, setSelectedGenres] = useState<string[]>([])
   const [showFamilyList, setShowFamilyList] = useState(true)
+  const [isCreating, setIsCreating] = useState(false)
+  const [showFilters, setShowFilters] = useState(true)
 
   const visibleGenres = useMemo(() => {
-    const filtered = genreStats.filter((g) => (selectedFamily ? g.family === selectedFamily : true))
-    if (!selectedFamily) {
-      const allPicks = genreStats.flatMap((g) => g.picks)
-      return [
-        {
-          name: 'All albums',
-          family: 'All',
-          count: allPicks.length,
-          picks: allPicks.sort((a, b) => (b.year ?? 0) - (a.year ?? 0)),
-        },
-        ...filtered,
-      ]
-    }
-    const familyPicks = filtered.flatMap((g) => g.picks)
-    const totalCount = familyPicks.length
-    if (!totalCount) return filtered
-    return [
-      {
-        name: `All ${selectedFamily}`,
-        family: selectedFamily,
-        count: totalCount,
-        picks: familyPicks.sort((a, b) => (b.year ?? 0) - (a.year ?? 0)),
-      },
-      ...filtered,
-    ]
-  }, [genreStats, selectedFamily])
+    const filtered =
+      selectedFamilies.length === 0
+        ? genreStats
+        : genreStats.filter((g) => selectedFamilies.includes(g.family))
+    return filtered
+  }, [genreStats, selectedFamilies])
 
-  const selectedGenreEntry =
-    visibleGenres.find((g) => g.name === selectedGenre) ||
-    genreStats.find((g) => g.name === selectedGenre)
+  const selectedPicks = useMemo(() => {
+    if (selectedGenres.length > 0) {
+      return genreStats
+        .filter((g) => selectedGenres.includes(g.name))
+        .flatMap((g) => g.picks)
+    }
+    const base =
+      selectedFamilies.length === 0
+        ? genreStats
+        : genreStats.filter((g) => selectedFamilies.includes(g.family))
+    return base.flatMap((g) => g.picks)
+  }, [genreStats, selectedFamilies, selectedGenres])
+
+  const selectionLabel = useMemo(() => {
+    if (selectedGenres.length > 0) {
+      return selectedGenres.join(', ')
+    }
+    if (selectedFamilies.length > 0) {
+      return selectedFamilies.join(', ')
+    }
+    return 'All albums'
+  }, [selectedFamilies, selectedGenres])
   const timelineData = useMemo(() => {
-    if (!selectedGenreEntry || !selectedGenreEntry.picks.length) return null
-    const picks = selectedGenreEntry.picks
+    if (!selectedPicks.length) return null
+    const picks = selectedPicks
     const years = picks.map((p) => p.year).filter((y): y is number => !!y)
     const minY = years.length ? Math.min(...years) : 1990
     const maxY = years.length ? Math.max(...years) : 2025
@@ -258,22 +255,113 @@ export function GenrePopularityList({ picks }: GenrePopularityListProps) {
       visibleHeight,
       points,
     }
-  }, [selectedGenreEntry])
+  }, [selectedPicks])
 
-  const chartOffset = timelineData && timelineData.artists.length <= 10 ? '18rem' : '0'
+  const overlayWidth = 240
+  const contentOffset = showFilters ? `${overlayWidth + 16}px` : '0'
+
+  const toggleFamily = (fam: string | null) => {
+    if (fam === null) {
+      setSelectedFamilies([])
+      setSelectedGenres([])
+      return
+    }
+    setSelectedFamilies((prev) =>
+      prev.includes(fam) ? prev.filter((f) => f !== fam) : [...prev, fam],
+    )
+    setSelectedGenres([])
+  }
+
+  const toggleGenre = (name: string) => {
+    setSelectedGenres((prev) =>
+      prev.includes(name) ? prev.filter((g) => g !== name) : [...prev, name],
+    )
+  }
+
+  const buildPayload = () => ({
+    name: `Album Club — ${selectionLabel}`,
+    picks: selectedPicks.map((p) => ({
+      id: p.id,
+      artist: p.artist,
+      title: p.title,
+      album: p.album,
+      platform_url: p.platform_url,
+    })),
+  })
+
+  async function createPlaylistFromPayload(payload: any, fromPending = false) {
+    if (!payload?.picks?.length || isCreating) return
+    setIsCreating(true)
+    try {
+      const res = await fetch('/api/spotify/create-playlist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      const json = await res.json()
+      if (!res.ok) {
+        if (res.status === 401) {
+          const msg = ((json.error as string) || '').toLowerCase()
+          // If we already tried once after login, stop looping and prompt.
+          if (fromPending) {
+            sessionStorage.removeItem('pendingPlaylist')
+            alert(json.error || 'Please connect Spotify and try again.')
+            return
+          }
+          // Store payload and send user to Spotify login.
+          sessionStorage.setItem('pendingPlaylist', JSON.stringify(payload))
+          window.location.href = '/api/spotify/login'
+          return
+        }
+        alert(json.error || 'Failed to create playlist')
+        return
+      }
+      sessionStorage.removeItem('pendingPlaylist')
+      if (json.playlist_url) {
+        window.open(json.playlist_url, '_blank')
+      } else {
+        alert(`Created playlist with ${json.added} tracks`)
+      }
+    } catch (err: any) {
+      alert(err?.message || 'Failed to create playlist')
+    } finally {
+      setIsCreating(false)
+    }
+  }
+
+  async function createPlaylist() {
+    const payload = buildPayload()
+    await createPlaylistFromPayload(payload)
+  }
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const pending = sessionStorage.getItem('pendingPlaylist')
+    if (pending && !isCreating) {
+      try {
+        const payload = JSON.parse(pending)
+        createPlaylistFromPayload(payload, true)
+      } catch {
+        sessionStorage.removeItem('pendingPlaylist')
+      }
+    }
+  }, [isCreating])
 
   return (
     <div className="relative">
       <div className="rounded-2xl border border-border bg-card p-3 shadow-md relative">
-        <div className="absolute top-3 left-3 z-10 w-64 max-w-[70vw] rounded-xl border border-border bg-background/95 backdrop-blur shadow-lg p-3 space-y-3">
+        {showFilters ? (
+          <div
+            className="absolute top-3 left-3 z-10 w-[240px] max-w-[70vw] rounded-xl border border-border bg-background/95 backdrop-blur shadow-lg p-3 space-y-3"
+          >
           <div className="flex items-center justify-between text-sm text-muted-foreground">
             <span>Filters</span>
-            {selectedFamily && (
+            {selectedFamilies.length > 0 && (
               <button
                 className="text-xs text-foreground font-semibold underline"
                 onClick={() => {
-                  setSelectedFamily(null)
-                  setSelectedGenre(null)
+                  setSelectedFamilies([])
+                  setSelectedGenres([])
                   setShowFamilyList(true)
                 }}
               >
@@ -285,9 +373,9 @@ export function GenrePopularityList({ picks }: GenrePopularityListProps) {
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-sm font-semibold text-foreground">
-                {selectedFamily ? `Family: ${selectedFamily}` : 'Choose family'}
+                {selectedFamilies.length ? `Families: ${selectedFamilies.length}` : 'Choose family'}
               </span>
-              {selectedFamily && (
+              {selectedFamilies.length > 0 && (
                 <button
                   className="text-xs text-foreground underline"
                   onClick={() => setShowFamilyList((v) => !v)}
@@ -300,14 +388,11 @@ export function GenrePopularityList({ picks }: GenrePopularityListProps) {
               <div className="space-y-1 mb-1">
                 <button
                   className={`w-full rounded px-3 py-2 text-left transition ${
-                    selectedFamily === null
+                    selectedFamilies.length === 0
                       ? 'bg-primary/10 text-foreground border border-primary/30'
                       : 'hover:bg-muted text-foreground'
                   }`}
-                  onClick={() => {
-                    setSelectedFamily(null)
-                    setSelectedGenre('All albums')
-                  }}
+                  onClick={() => toggleFamily(null)}
                 >
                   <div className="flex items-center justify-between">
                     <span className="font-medium">All albums</span>
@@ -321,16 +406,11 @@ export function GenrePopularityList({ picks }: GenrePopularityListProps) {
                   <button
                     key={f.family}
                     className={`w-full rounded px-3 py-2 text-left transition ${
-                      selectedFamily === f.family
+                      selectedFamilies.includes(f.family)
                         ? 'bg-primary/10 text-foreground border border-primary/30'
                         : 'hover:bg-muted text-foreground'
                     }`}
-                    onClick={() => {
-                      setSelectedFamily(f.family)
-                      const firstGenre = visibleGenres.find((g) => g.family === f.family)
-                      if (firstGenre) setSelectedGenre(firstGenre.name)
-                      setShowFamilyList(false)
-                    }}
+                    onClick={() => toggleFamily(f.family)}
                   >
                     <div className="flex items-center justify-between">
                       <span className="font-medium">{f.family}</span>
@@ -345,12 +425,12 @@ export function GenrePopularityList({ picks }: GenrePopularityListProps) {
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-sm font-semibold text-foreground">
-                {selectedFamily ? `Genres in ${selectedFamily}` : 'Genres'}
+                {selectedFamilies.length ? `Genres in ${selectedFamilies.join(', ')}` : 'Genres'}
               </span>
-              {selectedGenre && (
+              {selectedGenres.length > 0 && (
                 <button
                   className="text-xs text-foreground underline"
-                  onClick={() => setSelectedGenre(null)}
+                  onClick={() => setSelectedGenres([])}
                 >
                   Clear genre
                 </button>
@@ -361,11 +441,11 @@ export function GenrePopularityList({ picks }: GenrePopularityListProps) {
                 <button
                   key={g.name}
                   className={`w-full rounded px-3 py-2 text-left transition ${
-                    selectedGenre === g.name
+                    selectedGenres.includes(g.name)
                       ? 'bg-primary/10 text-foreground border border-primary/30'
                       : 'hover:bg-muted text-foreground'
                   }`}
-                  onClick={() => setSelectedGenre(g.name)}
+                  onClick={() => toggleGenre(g.name)}
                 >
                   <div className="flex items-center justify-between">
                     <span className="font-medium">{g.name}</span>
@@ -375,32 +455,60 @@ export function GenrePopularityList({ picks }: GenrePopularityListProps) {
               ))}
             </div>
           </div>
-        </div>
+            <div className="flex justify-end">
+              <button
+                className="text-xs text-foreground underline"
+                onClick={() => setShowFilters(false)}
+              >
+                Hide filters
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button
+            className="absolute top-3 left-3 z-10 rounded-full border border-border bg-background/90 px-3 py-1 text-xs font-semibold text-foreground shadow"
+            onClick={() => setShowFilters(true)}
+          >
+            Show filters
+          </button>
+        )}
 
-        <div className="mt-4" style={{ marginLeft: chartOffset }}>
+        <div className="mt-4" style={{ paddingLeft: contentOffset }}>
           <div className="mb-3 flex items-center justify-between">
             <div>
-              <div className="text-lg text-muted-foreground">Selected genre</div>
-              <div className="text-4xl font-extrabold text-foreground">{selectedGenre || '—'}</div>
+              <div className="text-lg text-muted-foreground">Selected</div>
+              <div className="text-4xl font-extrabold text-foreground">{selectionLabel}</div>
             </div>
-            {selectedGenreEntry && (
+            {selectedPicks.length > 0 && (
               <div className="text-2xl font-semibold text-foreground">
-                {selectedGenreEntry.count} picks
+                {selectedPicks.length} picks
               </div>
             )}
           </div>
 
-          {selectedGenreEntry && timelineData ? (
+          {timelineData ? (
             <div className="rounded-xl border border-border/70 bg-muted/20 px-3 py-3">
-              <div className="mb-4 flex items-center justify-between text-lg text-foreground font-semibold">
-                <span>Timeline (year vs artist)</span>
-                <span>
-                  Showing {timelineData.artists.length} of {timelineData.totalArtists} artists •{' '}
-                  {timelineData.domainMin} – {timelineData.domainMax}
-                </span>
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3 text-lg text-foreground font-semibold">
+                <div className="flex items-center gap-3">
+                  <span>Timeline (year vs artist)</span>
+                  <span>
+                    Showing {timelineData.artists.length} of {timelineData.totalArtists} artists •{' '}
+                    {timelineData.domainMin} – {timelineData.domainMax}
+                  </span>
+                </div>
+                {selectedPicks.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={createPlaylist}
+                      className="rounded-full bg-primary text-black font-semibold px-4 py-2 text-sm hover:bg-primary-hover transition"
+                    >
+                      Create Spotify playlist
+                    </button>
+                  </div>
+                )}
               </div>
 
-              <div className="grid grid-cols-[1fr_260px] gap-3">
+              <div className="grid grid-cols-[1fr_300px] gap-6 items-start">
                 <div className="relative border border-border/60 rounded-lg">
                   <svg width={timelineData.canvasWidth} height={timelineData.canvasHeight} className="block">
                     <line
@@ -465,23 +573,13 @@ export function GenrePopularityList({ picks }: GenrePopularityListProps) {
                   </svg>
                 </div>
 
-                <div className="rounded-lg border border-border/60">
-                  <div style={{ height: timelineData.canvasHeight, position: 'relative' }}>
-                    {timelineData.artists.map((artist, idx) => {
-                      const y =
-                        timelineData.axisTop +
-                        (timelineData.artists.length - 1 - idx) * timelineData.rowGap +
-                        4
-                      return (
-                        <div
-                          key={`label-${artist}`}
-                          style={{ position: 'absolute', top: y - 12, left: 12 }}
-                          className="text-[20px] font-extrabold text-foreground"
-                        >
-                          {artist}
-                        </div>
-                      )
-                    })}
+                <div className="rounded-lg border border-border/60 p-3">
+                  <div className="space-y-3">
+                    {timelineData.artists.map((artist, idx) => (
+                      <div key={`label-${artist}`} className="text-[18px] font-extrabold text-foreground">
+                        {artist}
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>
