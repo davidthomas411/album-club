@@ -162,25 +162,28 @@ export function GenrePopularityList({ picks }: GenrePopularityListProps) {
   }, [genreStats, selectedFamilies])
 
   const selectedPicks = useMemo(() => {
-    if (selectedGenres.length > 0) {
-      return genreStats
-        .filter((g) => selectedGenres.includes(g.name))
-        .flatMap((g) => g.picks)
-    }
-    const base =
-      selectedFamilies.length === 0
-        ? genreStats
-        : genreStats.filter((g) => selectedFamilies.includes(g.family))
-    const filtered = base.flatMap((g) => g.picks)
-    return filtered.filter((p) => {
+    const isExcluded = (p: PickInput) => {
       const combinedGenres = [p.genre, ...(p.genres || [])].filter(Boolean) as string[]
       const genreBlocked = excludedGenres.length
         ? combinedGenres.some((g) => excludedGenres.includes(g))
         : false
       const pickerBlocked =
         excludedPickers.length && p.picker ? excludedPickers.includes(p.picker) : false
-      return !genreBlocked && !pickerBlocked
-    })
+      return genreBlocked || pickerBlocked
+    }
+
+    if (selectedGenres.length > 0) {
+      return genreStats
+        .filter((g) => selectedGenres.includes(g.name))
+        .flatMap((g) => g.picks)
+        .filter((p) => !isExcluded(p))
+    }
+    const base =
+      selectedFamilies.length === 0
+        ? genreStats
+        : genreStats.filter((g) => selectedFamilies.includes(g.family))
+    const filtered = base.flatMap((g) => g.picks)
+    return filtered.filter((p) => !isExcluded(p))
   }, [genreStats, selectedFamilies, selectedGenres, excludedGenres, excludedPickers])
 
   const selectionLabel = useMemo(() => {
@@ -192,6 +195,19 @@ export function GenrePopularityList({ picks }: GenrePopularityListProps) {
     }
     return 'All albums'
   }, [selectedFamilies, selectedGenres])
+
+  const exclusionLabel = useMemo(() => {
+    const parts: string[] = []
+    if (excludedPickers.length) {
+      const who = excludedPickers.join(', ')
+      parts.push(`excluding picks from ${who}`)
+    }
+    if (excludedGenres.length) {
+      const gs = excludedGenres.join(', ')
+      parts.push(`excluding genres ${gs}`)
+    }
+    return parts.join(' • ')
+  }, [excludedGenres, excludedPickers])
 
   const clusterData = useMemo(() => {
     if (!selectedPicks.length) return null
@@ -280,9 +296,9 @@ export function GenrePopularityList({ picks }: GenrePopularityListProps) {
     name: (() => {
       const parts = [`Album Club — ${selectionLabel}`]
       const excludes: string[] = []
-      if (excludedGenres.length) excludes.push(`- genres: ${excludedGenres.join(', ')}`)
-      if (excludedPickers.length) excludes.push(`- pickers: ${excludedPickers.join(', ')}`)
-      if (excludes.length) parts.push(`(${excludes.join(' | ')})`)
+      if (excludedPickers.length) excludes.push(`excluding picks from ${excludedPickers.join(', ')}`)
+      if (excludedGenres.length) excludes.push(`excluding genres ${excludedGenres.join(', ')}`)
+      if (excludes.length) parts.push(`[${excludes.join(' | ')}]`)
       return parts.join(' ')
     })(),
     picks: selectedPicks.map((p) => ({
@@ -545,6 +561,11 @@ export function GenrePopularityList({ picks }: GenrePopularityListProps) {
             <div>
               <div className="text-lg text-muted-foreground">Selected</div>
               <div className="text-4xl font-extrabold text-foreground">{selectionLabel}</div>
+              {exclusionLabel && (
+                <div className="text-sm text-muted-foreground font-semibold mt-1">
+                  {exclusionLabel}
+                </div>
+              )}
             </div>
             {selectedPicks.length > 0 && (
               <div className="text-2xl font-semibold text-foreground">
