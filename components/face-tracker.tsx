@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import type { CSSProperties } from 'react'
+import { cn } from '@/lib/utils'
 
 interface FaceTrackerProps {
   memberFolder: string // e.g., 'john', 'sarah'
@@ -17,6 +19,8 @@ interface FaceTrackerProps {
     x: number
     y: number
   }
+  className?: string
+  style?: CSSProperties
 }
 
 const P_MIN = -15
@@ -61,6 +65,8 @@ export function FaceTracker({
   disablePointerTracking = false,
   fallbackBasePath,
   initialDirection,
+  className,
+  style,
 }: FaceTrackerProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const imgRef = useRef<HTMLImageElement>(null)
@@ -261,7 +267,7 @@ export function FaceTracker({
   }
 
   return (
-    <div ref={containerRef} className="relative">
+    <div ref={containerRef} className={cn('relative', className)} style={style}>
       <img
         ref={imgRef}
         alt="Face following cursor"

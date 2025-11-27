@@ -81,6 +81,7 @@ async function fetchAlbum(token, albumId) {
 
 async function main() {
   const csv = fs.readFileSync(path.resolve(inputPath), 'utf8').trim().split(/\r?\n/).slice(1)
+  const maxImport = parseInt(process.env.MAX_IMPORT || '0', 10)
   const albums = []
   for (const line of csv) {
     const row = parseCsvLine(line)
@@ -88,6 +89,7 @@ async function main() {
     const albumId = extractAlbumId(row.url)
     if (!albumId) continue
     albums.push({ ...row, albumId })
+    if (maxImport && albums.length >= maxImport) break
   }
 
   // Deduplicate by URL
@@ -102,15 +104,29 @@ async function main() {
 
   // Check existing platform_url in batches
   const existing = new Set()
-  const chunkSize = 200
+  const chunkSize = parseInt(process.env.CHUNK_SIZE || '30', 10)
   for (let i = 0; i < unique.length; i += chunkSize) {
     const chunk = unique.slice(i, i + chunkSize).map((a) => a.url)
-    const { data, error } = await supabase
-      .from('music_picks')
-      .select('platform_url')
-      .in('platform_url', chunk)
-    if (error) throw error
-    data?.forEach((row) => existing.add(row.platform_url))
+    try {
+      const { data, error } = await supabase
+        .from('music_picks')
+        .select('platform_url')
+        .in('platform_url', chunk)
+      if (error) {
+        console.error('[import-chat-albums] Supabase error object:', error)
+        throw error
+      }
+      data?.forEach((row) => existing.add(row.platform_url))
+    } catch (err) {
+      console.error('[import-chat-albums] Supabase fetch failed', {
+        chunkIndex: i / chunkSize,
+        chunkSize: chunk.length,
+        supabaseUrl: process.env.SUPABASE_URL,
+        error: err?.message || err,
+        note: 'If this is a Headers Overflow error, try setting CHUNK_SIZE=20',
+      })
+      process.exit(1)
+    }
   }
 
   const toInsert = unique.filter((a) => !existing.has(a.url))
@@ -133,8 +149,17 @@ async function main() {
         album_artwork_url: art,
         album_release_year: isNaN(year) ? null : year,
         platform_url: a.url,
+        platform: 'spotify',
+        pick_type: 'album',
         user_id: process.env.IMPORT_DEFAULT_USERID,
       })
+      if (process.env.DEBUG) {
+        console.log('[import-chat-albums] prepared', {
+          artist: primaryArtist,
+          album: albumName,
+          url: a.url,
+        })
+      }
     } catch (err) {
       console.error(`Failed album ${a.url}:`, err.message)
     }
@@ -143,6 +168,9 @@ async function main() {
   console.log(`Inserting ${rows.length} new albums...`)
   for (let i = 0; i < rows.length; i += 50) {
     const batch = rows.slice(i, i + 50)
+    if (process.env.DEBUG) {
+      console.log(`[import-chat-albums] inserting batch ${i / 50 + 1} (${batch.length} rows)`)
+    }
     const { error } = await supabase.from('music_picks').insert(batch)
     if (error) {
       console.error('Insert error:', error.message)
