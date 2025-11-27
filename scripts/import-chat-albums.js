@@ -44,6 +44,19 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SER
 
 const cleanTime = (t) => (t || '').replace(/\u202f/g, ' ')
 const normalizeUrl = (url) => (url ? url.split('?')[0].replace(/\/+$/, '') : '')
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+const now = () => new Date().toISOString()
+
+const fetchWithTimeout = async (url, options = {}, timeoutMs = 15000) => {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    const res = await fetch(url, { ...options, signal: controller.signal })
+    return res
+  } finally {
+    clearTimeout(timer)
+  }
+}
 
 // Map chat display names to canonical user ids in profiles
 const userMap = {
@@ -144,7 +157,7 @@ async function fetchDiscogsDetails(resourceUrl) {
 }
 
 async function getSpotifyToken() {
-  const res = await fetch('https://accounts.spotify.com/api/token', {
+  const res = await fetchWithTimeout('https://accounts.spotify.com/api/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
@@ -158,18 +171,66 @@ async function getSpotifyToken() {
   return json.access_token
 }
 
-async function fetchSpotify(token, kind, id) {
-  const endpoint = kind === 'track' ? 'tracks' : 'albums'
-  const res = await fetch(`https://api.spotify.com/v1/${endpoint}/${id}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  })
+async function fetchTrack(token, id) {
+  const retryBase = parseInt(process.env.ALBUM_SLEEP_MS || '800', 10)
+  const doFetch = async () =>
+    fetch(`https://api.spotify.com/v1/tracks/${id}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+  let res = await doFetch()
+  if (res.status === 429) {
+    const retryAfter = parseInt(res.headers.get('retry-after') || '1', 10) * 1000
+    const sleepMs = Math.max(retryAfter, retryBase)
+    await sleep(sleepMs)
+    res = await doFetch()
+  }
   if (!res.ok) {
-    throw new Error(`${endpoint} ${id} failed: ${res.status} ${await res.text()}`)
+    throw new Error(`track ${id} failed: ${res.status} ${await res.text()}`)
   }
   return res.json()
 }
 
+async function fetchAlbumsBatch(token, ids) {
+  const chunks = []
+  const retryBase = parseInt(process.env.ALBUM_SLEEP_MS || '800', 10)
+  for (let i = 0; i < ids.length; i += 20) chunks.push(ids.slice(i, i + 20))
+
+  const results = new Map()
+  for (const chunk of chunks) {
+    if (process.env.DEBUG) console.log('[spotify] fetch albums chunk size', chunk.length, 'at', now())
+    const doFetch = async () =>
+      fetchWithTimeout(`https://api.spotify.com/v1/albums?ids=${chunk.join(',')}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+    let res
+    try {
+      res = await doFetch()
+      if (res.status === 429) {
+        const retryAfter = parseInt(res.headers.get('retry-after') || '1', 10) * 1000
+        const sleepMs = Math.max(retryAfter, retryBase)
+        if (process.env.DEBUG) console.log('[spotify] 429, sleeping', sleepMs, 'ms')
+        await sleep(sleepMs)
+        res = await doFetch()
+      }
+      if (!res.ok) {
+        const txt = await res.text()
+        console.error('[spotify] album batch failed', res.status, txt)
+        continue
+      }
+      const json = await res.json()
+      for (const alb of json.albums || []) {
+        if (alb?.id) results.set(alb.id, alb)
+      }
+      await sleep(retryBase)
+    } catch (err) {
+      console.error('[spotify] album batch error', err.message)
+    }
+  }
+  return results
+}
+
 async function main() {
+  console.log(`[start] ${now()} input=${inputPath}`)
   const csv = fs.readFileSync(path.resolve(inputPath), 'utf8').trim().split(/\r?\n/).slice(1)
   const maxImport = parseInt(process.env.MAX_IMPORT || '0', 10)
   const albums = []
@@ -185,13 +246,18 @@ async function main() {
 
   // Deduplicate by URL
   const seen = new Set()
-  const unique = albums.filter((a) => {
+  let unique = albums.filter((a) => {
     if (seen.has(a.url)) return false
     seen.add(a.url)
     return true
   })
 
-  console.log(`Found ${unique.length} unique album URLs in ${inputPath}`)
+  if (maxImport > 0 && unique.length > maxImport) {
+    unique = unique.slice(0, maxImport)
+    console.log(`Found ${albums.length} unique URLs, trimming to first ${maxImport} due to MAX_IMPORT`)
+  } else {
+    console.log(`Found ${unique.length} unique album URLs in ${inputPath}`)
+  }
 
   // Check existing platform_url in batches
   const existing = new Map()
@@ -223,10 +289,22 @@ async function main() {
   const toInsert = unique.filter((a) => !existing.has(a.normUrl))
   console.log(`Skipping ${existing.size} already present. Preparing to insert ${toInsert.length}.`)
 
+  console.log(`[token] requesting at ${now()}`)
   const token = await getSpotifyToken()
+  console.log(`[token] ok at ${now()}`)
   const inserts = []
   const updates = []
   let skippedThemed = 0
+
+  // Preload album metadata in batches
+  const albumIds = Array.from(new Set(unique.filter((a) => a.kind === 'album').map((a) => a.albumId)))
+  console.log(`[prefetch] albums requested ${albumIds.length} at ${now()}`)
+  const albumMap = await fetchAlbumsBatch(token, albumIds)
+  if (process.env.DEBUG) console.log('[prefetch] albums requested', albumIds.length, 'fetched', albumMap.size)
+  if (!albumMap.size) {
+    console.error('[prefetch] no albums fetched; aborting')
+    process.exit(1)
+  }
 
   for (const a of unique) {
     const existingRow = existing.get(a.normUrl)
@@ -250,8 +328,24 @@ async function main() {
     }
 
     try {
-      const entity = await fetchSpotify(token, a.kind, a.albumId)
-      const albumData = a.kind === 'track' ? entity.album || {} : entity
+      let albumData = null
+      let entity = null
+      const originalUrl = a.url
+      if (a.kind === 'track') {
+        entity = await fetchTrack(token, a.albumId)
+        albumData = entity.album || {}
+        // replace platform_url with album URL so we store albums consistently
+        const albumId = albumData.id
+        if (albumId) a.url = `https://open.spotify.com/album/${albumId}`
+        if (process.env.DEBUG) console.log('[track->album]', a.albumId, '=>', albumId)
+      } else {
+        albumData = albumMap.get(a.albumId)
+        if (!albumData) {
+          if (process.env.DEBUG) console.log('[missing album metadata]', a.albumId, a.url)
+          continue
+        }
+      }
+
       const primaryArtist = albumData.artists?.[0]?.name || 'Unknown artist'
       const albumName = albumData.name || 'Untitled'
       const art = albumData.images?.[0]?.url || null

@@ -12,6 +12,7 @@ type PickInput = {
   genres?: string[]
   picker?: string
   createdAt?: string
+  platformUrl?: string
 }
 
 interface GenrePopularityListProps {
@@ -261,6 +262,7 @@ export function GenrePopularityList({ picks }: GenrePopularityListProps) {
         artwork: p.artwork,
         id: p.id,
         shortArtist,
+        platformUrl: p.platformUrl,
       })
     }
 
@@ -615,29 +617,49 @@ export function GenrePopularityList({ picks }: GenrePopularityListProps) {
                     preserveAspectRatio="xMidYMid meet"
                   >
                     {clusterData.nodes.map((p) => (
-                      <g key={p.id} transform={`translate(${p.x},${p.y})`}>
-                        <circle
-                          r={22}
-                          fill="rgba(255,255,255,0.08)"
-                          stroke="rgba(255,255,255,0.3)"
-                          strokeWidth={1}
-                        />
-                        <foreignObject x={-22} y={-22} width={44} height={44}>
-                          <div
-                            className="h-[44px] w-[44px] rounded-full border border-border/60 bg-muted bg-cover bg-center shadow"
-                            style={{ backgroundImage: p.artwork ? `url(${p.artwork})` : undefined }}
-                            title={`${p.artist} — ${p.title}`}
+                      <a
+                        key={p.id}
+                        href={p.platformUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="cursor-pointer"
+                      >
+                        <g transform={`translate(${p.x},${p.y})`}>
+                          <circle
+                            r={22}
+                            fill="rgba(255,255,255,0.08)"
+                            stroke="rgba(255,255,255,0.3)"
+                            strokeWidth={1}
                           />
-                        </foreignObject>
-                        <text
-                          x={0}
-                          y={32}
-                          textAnchor="middle"
-                          className="text-[10px] fill-foreground/80 font-semibold pointer-events-none"
-                        >
-                          {p.shortArtist}
-                        </text>
-                      </g>
+                          <foreignObject x={-22} y={-22} width={44} height={44}>
+                            <div className="relative h-[44px] w-[44px]" title={`${p.artist} — ${p.title}`}>
+                              <div
+                                className="absolute inset-0 rounded-full blur-md opacity-70"
+                                style={{
+                                  backgroundImage: p.artwork ? `url(${p.artwork})` : undefined,
+                                  backgroundSize: 'cover',
+                                  backgroundPosition: 'center',
+                                  filter: 'blur(6px)',
+                                  transform: 'scale(1.3)',
+                                }}
+                                aria-hidden="true"
+                              />
+                              <div
+                                className="relative h-[44px] w-[44px] rounded-full border border-border/60 bg-muted bg-cover bg-center shadow transition-transform duration-300 hover:scale-105"
+                                style={{ backgroundImage: p.artwork ? `url(${p.artwork})` : undefined }}
+                              />
+                            </div>
+                          </foreignObject>
+                          <text
+                            x={0}
+                            y={32}
+                            textAnchor="middle"
+                            className="text-[10px] fill-foreground/80 font-semibold pointer-events-none"
+                          >
+                            {p.shortArtist}
+                          </text>
+                        </g>
+                      </a>
                     ))}
                   </svg>
                 </div>

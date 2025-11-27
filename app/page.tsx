@@ -461,7 +461,7 @@ export default function HomePage() {
     <div className="flex min-h-screen bg-background overflow-x-hidden">
       <button
         onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-        className="fixed top-4 left-4 z-50 md:hidden bg-surface p-2 rounded-lg shadow-lg"
+        className="fixed top-4 right-4 z-50 md:hidden bg-surface p-2 rounded-lg shadow-lg"
       >
         <Menu className="w-6 h-6" />
       </button>
