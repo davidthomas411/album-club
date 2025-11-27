@@ -456,6 +456,15 @@ export default function HomePage() {
   const latestPickLink = latestPick?.platform_url
     ? `/link?url=${encodeURIComponent(latestPick.platform_url)}`
     : null
+  const latestGlowStyle = latestPick?.album_artwork_url
+    ? {
+        backgroundImage: `url(${latestPick.album_artwork_url})`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        filter: 'blur(48px) saturate(140%)',
+        opacity: 0.8,
+      }
+    : undefined
 
   return (
     <div className="flex min-h-screen bg-background overflow-x-hidden">
@@ -535,7 +544,7 @@ export default function HomePage() {
                   target={latestPickLink ? '_blank' : undefined}
                   rel={latestPickLink ? 'noopener noreferrer' : undefined}
                 >
-                  <div className="hero-latest__glow" />
+                  <div className="hero-latest__glow" style={latestGlowStyle} />
                   <div className="hero-latest__card scale-[0.92] md:scale-[0.97] origin-center max-w-[360px] mx-auto">
                     <VinylArtwork
                       artworkUrl={latestPick.album_artwork_url}
@@ -570,18 +579,27 @@ export default function HomePage() {
             </Link>
           </div>
           
-          {weeklyPicks.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 md:gap-8 max-w-7xl">
-              {weeklyPicks.map((pick) => {
-                const userPrefix = pick.user?.face_blob_prefix
-                const userFaces = userPrefix ? userFaceImages[userPrefix] : undefined
-                return (
-                  <a 
-                    key={pick.id}
-                    href={`/link?url=${encodeURIComponent(pick.platform_url)}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="group hover-spot bg-surface hover:bg-surface-hover p-5 md:p-6 rounded-lg transition-all duration-300 cursor-pointer flex flex-col"
+              {weeklyPicks.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 md:gap-8 max-w-7xl">
+                  {weeklyPicks.map((pick) => {
+                    const userPrefix = pick.user?.face_blob_prefix
+                    const userFaces = userPrefix ? userFaceImages[userPrefix] : undefined
+                    const glowStyle = pick.album_artwork_url
+                      ? {
+                          backgroundImage: `url(${pick.album_artwork_url})`,
+                          backgroundSize: 'cover',
+                          backgroundPosition: 'center',
+                          filter: 'blur(32px) saturate(140%)',
+                          opacity: 0.8,
+                        }
+                      : undefined
+                    return (
+                      <a 
+                        key={pick.id}
+                        href={`/link?url=${encodeURIComponent(pick.platform_url)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="group hover-spot bg-surface hover:bg-surface-hover p-5 md:p-6 rounded-lg transition-all duration-300 cursor-pointer flex flex-col"
                     onMouseMove={(e) => {
                       const rect = e.currentTarget.getBoundingClientRect()
                       const x = e.clientX - rect.left
@@ -593,14 +611,15 @@ export default function HomePage() {
                       e.currentTarget.style.setProperty('--mx', `50%`)
                       e.currentTarget.style.setProperty('--my', `50%`)
                     }}
-                  >
-                    {/* Album artwork - no face tracker here */}
-                    <div className="relative mb-5 md:mb-6 transform scale-85 md:scale-90 origin-center">
-                      <VinylArtwork
-                        artworkUrl={pick.album_artwork_url}
-                        alt={`${pick.album} by ${pick.artist}`}
-                        seed={pick.id}
-                      />
+                    >
+                      {/* Album artwork - no face tracker here */}
+                      <div className="relative mb-5 md:mb-6 transform scale-85 md:scale-90 origin-center">
+                        <div className="absolute inset-0 rounded-[32px] blur-3xl opacity-80 pointer-events-none" style={glowStyle} />
+                        <VinylArtwork
+                          artworkUrl={pick.album_artwork_url}
+                          alt={`${pick.album} by ${pick.artist}`}
+                          seed={pick.id}
+                        />
 
                       {!pick.album_artwork_url && (
                         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
