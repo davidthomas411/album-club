@@ -38,23 +38,34 @@ function isAlbumUrl(url?: string | null) {
 
 export default async function MusicMapPage() {
   const supabase = await createClient()
-  const { data } = await supabase
-    .from('music_picks')
-    .select(`
-      id,
-      title,
-      album,
-      artist,
-      album_artwork_url,
-      platform_url,
-      album_genres,
-      artist_genres,
-      album_release_year,
-      created_at,
-      user:user_id(display_name),
-      album_artwork_url
-    `)
-    .order('created_at', { ascending: false })
+  const pageSize = 1000
+  let data: any[] = []
+  for (let offset = 0; offset < 6000; offset += pageSize) {
+    const { data: chunk, error } = await supabase
+      .from('music_picks')
+      .select(
+        `
+        id,
+        title,
+        album,
+        artist,
+        album_artwork_url,
+        platform_url,
+        album_genres,
+        artist_genres,
+        album_release_year,
+        created_at,
+        user:user_id(display_name),
+        album_artwork_url
+      `,
+      )
+      .order('created_at', { ascending: false })
+      .range(offset, offset + pageSize - 1)
+    if (error) break
+    if (!chunk || chunk.length === 0) break
+    data = data.concat(chunk)
+    if (chunk.length < pageSize) break
+  }
 
   const picks =
     data

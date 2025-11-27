@@ -33,9 +33,10 @@ function parseLine(line) {
   return { date, time, user: userRaw.toLowerCase().trim(), url, type }
 }
 
-function extractAlbumId(url) {
-  const m = url.match(/spotify\.com\/album\/([A-Za-z0-9]{16,24})/)
-  return m ? m[1] : null
+const normalize = (url) => {
+  if (!url) return ''
+  const noQuery = url.split('?')[0]
+  return noQuery.replace(/\/+$/, '')
 }
 
 async function main() {
@@ -44,55 +45,51 @@ async function main() {
   for (const line of csv) {
     const r = parseLine(line)
     if (!r) continue
-    if (r.type !== 'album') continue
-    const albumId = extractAlbumId(r.url)
-    if (!albumId) continue
+    if (r.type !== 'album' && r.type !== 'song') continue
     const uid = USER_MAP[r.user]
     if (!uid) continue
-    rows.push({ url: r.url, user_id: uid })
+    rows.push({
+      url: r.url,
+      norm: normalize(r.url),
+      user_id: uid,
+      pick_type: r.type === 'song' ? 'song' : 'album',
+    })
     if (max && rows.length >= max) break
   }
   console.log('Parsed rows', rows.length)
 
-  // dedupe by url
-  const seen = new Set()
-  const list = rows.filter((r) => {
-    if (seen.has(r.url)) return false
-    seen.add(r.url)
-    return true
+  const map = new Map()
+  rows.forEach((r) => {
+    if (!map.has(r.norm)) map.set(r.norm, r)
   })
-  console.log('Unique rows', list.length)
+  console.log('Unique normalized URLs', map.size)
+
+  const { data, error } = await supabase
+    .from('music_picks')
+    .select('id, platform_url')
+    .or(`user_id.eq.${IMPORTED_ID},user_id.is.null`)
+
+  if (error) {
+    console.error('Select error', error)
+    process.exit(1)
+  }
 
   let updated = 0
-  const chunkSize = 50
-  for (let i = 0; i < list.length; i += chunkSize) {
-    const chunk = list.slice(i, i + chunkSize)
-    const urls = chunk.map((r) => r.url)
-    const { data, error } = await supabase
+  for (const row of data || []) {
+    const norm = normalize(row.platform_url)
+    const target = map.get(norm)
+    if (!target) continue
+    const { error: uErr } = await supabase
       .from('music_picks')
-      .select('id, platform_url')
-      .in('platform_url', urls)
-      .eq('user_id', IMPORTED_ID)
-    if (error) {
-      console.error('Select error', error)
+      .update({ user_id: target.user_id, pick_type: target.pick_type || 'album' })
+      .eq('id', row.id)
+    if (uErr) {
+      console.error('Update error', uErr)
       process.exit(1)
     }
-    if (!data?.length) continue
-    for (const row of data) {
-      const target = chunk.find((c) => c.url === row.platform_url)
-      if (!target) continue
-      const { error: uErr } = await supabase
-        .from('music_picks')
-        .update({ user_id: target.user_id, pick_type: 'album' })
-        .eq('id', row.id)
-      if (uErr) {
-        console.error('Update error', uErr)
-        process.exit(1)
-      }
-      updated += 1
-      if (process.env.DEBUG) {
-        console.log('[reassign] set', row.platform_url, '->', target.user_id)
-      }
+    updated += 1
+    if (process.env.DEBUG) {
+      console.log('[reassign] set', row.platform_url, '->', target.user_id, 'type', target.pick_type)
     }
   }
 

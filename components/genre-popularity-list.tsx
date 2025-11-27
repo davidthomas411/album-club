@@ -11,6 +11,7 @@ type PickInput = {
   artist?: string
   genres?: string[]
   picker?: string
+  createdAt?: string
 }
 
 interface GenrePopularityListProps {
@@ -161,6 +162,13 @@ export function GenrePopularityList({ picks }: GenrePopularityListProps) {
     return filtered
   }, [genreStats, selectedFamilies])
 
+  const sortByDate = (list: PickInput[]) =>
+    [...list].sort((a, b) => {
+      const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0
+      const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0
+      return bTime - aTime
+    })
+
   const selectedPicks = useMemo(() => {
     const isExcluded = (p: PickInput) => {
       const combinedGenres = [p.genre, ...(p.genres || [])].filter(Boolean) as string[]
@@ -173,17 +181,19 @@ export function GenrePopularityList({ picks }: GenrePopularityListProps) {
     }
 
     if (selectedGenres.length > 0) {
-      return genreStats
+      return sortByDate(
+        genreStats
         .filter((g) => selectedGenres.includes(g.name))
         .flatMap((g) => g.picks)
-        .filter((p) => !isExcluded(p))
+        .filter((p) => !isExcluded(p)),
+      )
     }
     const base =
       selectedFamilies.length === 0
         ? genreStats
         : genreStats.filter((g) => selectedFamilies.includes(g.family))
     const filtered = base.flatMap((g) => g.picks)
-    return filtered.filter((p) => !isExcluded(p))
+    return sortByDate(filtered.filter((p) => !isExcluded(p)))
   }, [genreStats, selectedFamilies, selectedGenres, excludedGenres, excludedPickers])
 
   const selectionLabel = useMemo(() => {
