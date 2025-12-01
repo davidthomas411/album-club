@@ -3,6 +3,9 @@ import { SiteLogo } from '@/components/site-logo'
 import Link from 'next/link'
 import { GenrePopularityList } from '@/components/genre-popularity-list'
 
+const PLAYLIST_ID = '7beGL2PIiYMXSsiVUdNIP3'
+const RECENT_DAYS = 14
+
 type PickRow = {
   id: string
   title: string | null
@@ -20,6 +23,12 @@ type PickRow = {
 
 export const dynamic = 'force-dynamic'
 
+const albumIdFromUrl = (url?: string | null) => {
+  if (!url) return null
+  const m = url.match(/album\/([A-Za-z0-9]{16,24})/)
+  return m ? m[1] : null
+}
+
 function isAlbumUrl(url?: string | null) {
   if (!url) return false
   const u = url.toLowerCase()
@@ -36,8 +45,45 @@ function isAlbumUrl(url?: string | null) {
   return isAlbum
 }
 
+async function getSpotifyToken() {
+  if (!process.env.SPOTIFY_CLIENT_ID || !process.env.SPOTIFY_CLIENT_SECRET) return null
+  const res = await fetch('https://accounts.spotify.com/api/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'client_credentials',
+      client_id: process.env.SPOTIFY_CLIENT_ID,
+      client_secret: process.env.SPOTIFY_CLIENT_SECRET,
+    }),
+    cache: 'no-store',
+  })
+  if (!res.ok) return null
+  const json = await res.json()
+  return json.access_token as string
+}
+
+async function fetchPlaylistAlbumIds(): Promise<Set<string>> {
+  const token = await getSpotifyToken()
+  if (!token) return new Set()
+  const ids: Set<string> = new Set()
+  let url: string | null = `https://api.spotify.com/v1/playlists/${PLAYLIST_ID}/tracks?limit=100`
+  while (url) {
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' })
+    if (!res.ok) break
+    const json = await res.json()
+    for (const item of json.items || []) {
+      const aid = item.track?.album?.id
+      if (aid) ids.add(aid)
+    }
+    url = json.next
+  }
+  return ids
+}
+
 export default async function MusicMapPage() {
   const supabase = await createClient()
+  const playlistAlbumIds = await fetchPlaylistAlbumIds()
+  const recentCutoff = Date.now() - RECENT_DAYS * 24 * 60 * 60 * 1000
   const pageSize = 1000
   let data: any[] = []
   for (let offset = 0; offset < 6000; offset += pageSize) {
@@ -71,30 +117,39 @@ export default async function MusicMapPage() {
     data
       ?.filter((row) => isAlbumUrl(row.platform_url))
       .map((row) => {
-      const primaryGenre =
-        (row.album_genres && row.album_genres[0]) ||
-        (row.artist_genres && row.artist_genres[0]) ||
-        'Unknown'
-      const genres =
-        (row.album_genres && row.album_genres.length ? row.album_genres : []) ||
-        (row.artist_genres && row.artist_genres.length ? row.artist_genres : []) ||
-        []
-      const year =
-        row.album_release_year ||
-        (row.created_at ? new Date(row.created_at).getFullYear() : null)
-      return {
-        id: row.id,
-        title: row.album || row.title || 'Untitled',
-        artist: row.artist || 'Unknown artist',
-        genre: primaryGenre,
-        genres,
-        artwork: row.album_artwork_url,
-        picker: row.user?.display_name || undefined,
-        platformUrl: row.platform_url,
-        year,
-        createdAt: row.created_at || undefined,
-      }
-    }) || []
+        const primaryGenre =
+          (row.album_genres && row.album_genres[0]) ||
+          (row.artist_genres && row.artist_genres[0]) ||
+          'Unknown'
+        const genres =
+          (row.album_genres && row.album_genres.length ? row.album_genres : []) ||
+          (row.artist_genres && row.artist_genres.length ? row.artist_genres : []) ||
+          []
+        const year =
+          row.album_release_year ||
+          (row.created_at ? new Date(row.created_at).getFullYear() : null)
+        return {
+          id: row.id,
+          title: row.album || row.title || 'Untitled',
+          artist: row.artist || 'Unknown artist',
+          genre: primaryGenre,
+          genres,
+          artwork: row.album_artwork_url,
+          picker: row.user?.display_name || undefined,
+          platformUrl: row.platform_url,
+          year,
+          createdAt: row.created_at || undefined,
+        }
+      })
+      .filter((p) => {
+        const albumId = albumIdFromUrl(p.platformUrl)
+        const isRecent = p.createdAt ? new Date(p.createdAt).getTime() >= recentCutoff : false
+        if (isRecent) return true
+        if (!albumId) return false
+        // If playlist fetch failed, show recent only
+        if (playlistAlbumIds.size === 0) return false
+        return playlistAlbumIds.has(albumId)
+      }) || []
 
   return (
     <div className="min-h-screen bg-background">
