@@ -144,10 +144,10 @@ export default async function MusicMapPage() {
       .filter((p) => {
         const albumId = albumIdFromUrl(p.platformUrl)
         const isRecent = p.createdAt ? new Date(p.createdAt).getTime() >= recentCutoff : false
-        const allowAll = playlistAlbumIds.size === 0
-        if (allowAll) return true
         if (isRecent) return true
         if (!albumId) return false
+        // If playlist fetch failed, fall back to recent-only (skip old picks)
+        if (playlistAlbumIds.size === 0) return false
         return playlistAlbumIds.has(albumId)
       }) || []
 
